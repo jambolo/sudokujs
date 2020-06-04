@@ -197,11 +197,13 @@ class SudokuGame
     if (@undoJournal.length > 0)
       step = @undoJournal.pop()
       @do step.action, step.x, step.y, step.values, @redoJournal
+      return [ step.x, step.y ]
 
   redo: ->
     if (@redoJournal.length > 0)
       step = @redoJournal.pop()
       @do step.action, step.x, step.y, step.values, @undoJournal
+      return [ step.x, step.y ]
 
   clearPencil: (x, y) ->
     cell = @grid[x][y]

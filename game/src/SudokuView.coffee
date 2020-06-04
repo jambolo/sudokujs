@@ -179,7 +179,7 @@ class SudokuView
     r = 2.2 * Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) # 2.2 gives the most curve without going off the board
     @app.drawArc(x1, y1, x2, y2, r, color, lineWidth)
 
-  draw: ->
+  draw: (flashX, flashY) ->
     console.log "draw()"
 
     # Clear screen to black
@@ -191,41 +191,46 @@ class SudokuView
     # Draw board numbers
     for j in [0...9]
       for i in [0...9]
-        cell = @game.grid[i][j]
+        if (i != flashX) || (j != flashY)
+          cell = @game.grid[i][j]
 
-        # Determine text attributes
-        backgroundColor = null
-        font = @fonts.pen
-        textColor = Color.value
-        text = ""
-        if cell.value == 0
-          font = @fonts.pencil
-          textColor = Color.pencil
-          text = @game.pencilString(i, j)
+          # Determine text attributes
+          backgroundColor = null
+          font = @fonts.pen
+          textColor = Color.value
+          text = ""
+          if cell.value == 0
+            font = @fonts.pencil
+            textColor = Color.pencil
+            text = @game.pencilString(i, j)
+          else
+            if cell.value > 0
+              text = String(cell.value)
+
+          if cell.error
+            textColor = Color.error
+
+          # Determine background color
+          if cell.locked
+            backgroundColor = Color.backgroundLocked
+
+          if @mode is ModeType.HIGHLIGHTING
+            if (@highlightX != -1) && (@highlightY != -1)
+              if (i == @highlightX) && (j == @highlightY)
+                if cell.locked
+                  backgroundColor = Color.backgroundLockedSelected
+                else
+                  backgroundColor = Color.backgroundSelected
+              else if @conflicts(i, j, @highlightX, @highlightY)
+                if cell.locked
+                  backgroundColor = Color.backgroundLockedConflicted
+                else
+                  backgroundColor = Color.backgroundConflicted
         else
-          if cell.value > 0
-            text = String(cell.value)
-
-        if cell.error
-          textColor = Color.error
-
-        # Determine background color
-        if cell.locked
-          backgroundColor = Color.backgroundLocked
-
-        if @mode is ModeType.HIGHLIGHTING
-          if (@highlightX != -1) && (@highlightY != -1)
-            if (i == @highlightX) && (j == @highlightY)
-              if cell.locked
-                backgroundColor = Color.backgroundLockedSelected
-              else
-                backgroundColor = Color.backgroundSelected
-            else if @conflicts(i, j, @highlightX, @highlightY)
-              if cell.locked
-                backgroundColor = Color.backgroundLockedConflicted
-              else
-                backgroundColor = Color.backgroundConflicted
-
+          backgroundColor = "black"
+          font = @fonts.pen
+          textColor = "black"
+          text = ""
         @drawCell(i, j, backgroundColor, text, font, textColor)
 
     # Draw links in LINKS mode
@@ -328,16 +333,19 @@ class SudokuView
         else
           @highlightX = action.x
           @highlightY = action.y
+        return []
       when ModeType.PENCIL
         if @penValue == CLEAR
           @game.clearPencil(action.x, action.y)
         else if @penValue != NONE
           @game.togglePencil(action.x, action.y, @penValue)
+        return [ action.x, action.y ]
       when ModeType.PEN
         if @penValue == CLEAR
           @game.setValue(action.x, action.y, 0)
         else if @penValue != NONE
           @game.setValue(action.x, action.y, @penValue)
+        return [ action.x, action.y ]
 
   handlePencilAction: (action) ->
     # In LINKS mode, all links associated with the number are shown. CLEAR shows nothing.
@@ -388,10 +396,10 @@ class SudokuView
     @weakLinks = []
 
   handleUndoAction: ->
-    @game.undo() if @mode isnt ModeType.LINKS
+    return @game.undo() if @mode isnt ModeType.LINKS
     
   handleRedoAction: ->
-    @game.redo() if @mode isnt ModeType.LINKS
+    return @game.redo() if @mode isnt ModeType.LINKS
     
   handleModeAction: ->
     switch @mode
@@ -414,6 +422,8 @@ class SudokuView
     x = Math.floor(x / @cellSize)
     y = Math.floor(y / @cellSize)
 
+    flashX = null
+    flashY = null
     if (x < 9) && (y < 15)
         index = (y * 9) + x
         action = @actions[index]
@@ -425,11 +435,11 @@ class SudokuView
             return
 
           switch action.type 
-            when ActionType.SELECT then @handleSelectAction(action)
+            when ActionType.SELECT then [ flashX, flashY ] = @handleSelectAction(action)
             when ActionType.PENCIL then @handlePencilAction(action)
             when ActionType.PEN then @handlePenAction(action)
-            when ActionType.UNDO then @handleUndoAction()
-            when ActionType.REDO then @handleRedoAction()
+            when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction()
+            when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction()
             when ActionType.MODE then @handleModeAction()
         else
           # no action, default to highlighting mode
@@ -440,7 +450,11 @@ class SudokuView
           @strongLinks = []
           @weakLinks = []
 
-        @draw()
+        @draw(flashX, flashY)
+        if (flashX? && flashY?)
+          setTimeout =>
+            @draw()
+          , 33
 
   # -------------------------------------------------------------------------------------
   # Helpers
