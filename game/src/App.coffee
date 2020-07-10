@@ -107,6 +107,7 @@ class App
     @ctx.beginPath()
     @ctx.strokeStyle = color
     @ctx.lineWidth = lineWidth
+    @ctx.lineCap = "butt"
     @ctx.moveTo(x1, y1)
     @ctx.lineTo(x2, y2)
     @ctx.stroke()
@@ -171,9 +172,17 @@ class App
     @ctx.beginPath()
     @ctx.strokeStyle = color
     @ctx.lineWidth = lineWidth
+    @ctx.lineCap = "round"
     @ctx.moveTo(x1, y1)
     @ctx.arcTo(Q.x, Q.y, x2, y2, radius)
     @ctx.stroke()
+    return
+
+  drawPoint: (x, y, r, color) ->
+    @ctx.beginPath()
+    @ctx.fillStyle = color
+    @ctx.arc(x, y, r, 0, 2*Math.PI)
+    @ctx.fill()
     return
 
 CanvasRenderingContext2D.prototype.roundRect = (x, y, w, h, r) ->

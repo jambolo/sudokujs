@@ -76,6 +76,7 @@ class SudokuView
     # calc render constants
     @lineWidthThin = 1
     @lineWidthThick = Math.max(@cellSize / 20, 3)
+    @linkDotRadius = @lineWidthThick
 
     fontPixelsS = Math.floor(@cellSize * 0.3)
     fontPixelsM = Math.floor(@cellSize * 0.5)
@@ -178,6 +179,8 @@ class SudokuView
     y2 = (endY + 0.5) * @cellSize
     r = 2.2 * Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) # 2.2 gives the most curve without going off the board
     @app.drawArc(x1, y1, x2, y2, r, color, lineWidth)
+    @app.drawPoint(x1, y1, @linkDotRadius, color)
+    @app.drawPoint(x2, y2, @linkDotRadius, color)
 
   draw: (flashX, flashY) ->
     console.log "draw()"
