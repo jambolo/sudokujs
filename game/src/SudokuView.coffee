@@ -89,6 +89,23 @@ KEY_MAPPING =
   '*': { v: 8, shift: true }
   '(': { v: 9, shift: true }
 
+# Celebration color palette
+CELEBRATION_COLORS = [
+  "#7f7fff",
+  "#7fff7f",
+  "#7fffff",
+  "#7f7f3f",
+  "#ff7f7f",
+  "#ff7fff",
+  "#ffff7f",
+  "#ffffff"
+]
+
+CELEBRATION_STEPS = 30          # Number of color changes in a celebration
+CELEBRATION_INTERVAL_MS = 33    # Time between celebration color changes
+
+FLASH_INTERVAL_MS = 33          # Length of flash
+
 class SudokuView
   # -------------------------------------------------------------------------------------
   # Init
@@ -179,16 +196,35 @@ class SudokuView
     @strongLinks = []
     @weakLinks = []
     @highlightingValues = false
-    @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS # Ensure the next tap is not a double tap
+    @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS  # Ensure the next tap is not a double tap
+    @celebrationCount = -1                            # -1 = never run, 0 = done, > 0 = running
 
   # -------------------------------------------------------------------------------------
   # Rendering
 
+  celebrate: ->
+    @draw()
+    if @celebrationCount > 0
+      --@celebrationCount
+      setTimeout =>
+        @celebrate()
+      , CELEBRATION_INTERVAL_MS
+
+  chooseCelebrationColor: (value) ->
+    color = null
+    if value > 0 and @celebrationCount > 0
+      index = (value + @celebrationCount - 2) % 8
+      color = CELEBRATION_COLORS[index]
+    return color
+
   chooseBackgroundColor: (i, j, value, locked, marks) ->
     color = null
+
+    # Locked cells
     if locked
       color = Color.backgroundLocked
 
+    # Override with any highlighting
     switch @mode
       when ModeType.VISIBILITY
         if (@visibilityX != -1) && (@visibilityY != -1)
@@ -208,6 +244,11 @@ class SudokuView
       when ModeType.PENCIL
         if @highlightingValues and value == 0 and @penValue in marks
           color = Color.backgroundSelected
+
+    # Override if celebrating
+    if @celebrationCount > 0
+      color = @chooseCelebrationColor(value)
+
     return color
 
   markOffset: (v) ->
@@ -380,6 +421,14 @@ class SudokuView
     @drawGrid(PEN_CLEAR_POS_X, PEN_CLEAR_POS_Y, 1)
     @drawGrid(PENCIL_CLEAR_POS_X, PENCIL_CLEAR_POS_Y, 1)
 
+    # If the game is solved, then start the celebration
+    if @game.solved and @celebrationCount < 0
+      @celebrationCount = CELEBRATION_STEPS
+      setTimeout =>
+        @celebrate()
+      , CELEBRATION_INTERVAL_MS
+
+
   # -------------------------------------------------------------------------------------
   # Input
 
@@ -453,13 +502,13 @@ class SudokuView
       # Also, if double tap, then turn on highlighting values
       when ModeType.PENCIL
         if @penValue == action.value
-          if not @doubleTapDetected()
+          if @doubleTapDetected()
+            @highlightingValues = true
+          else
             @highlightingValues = false
             @lastValueTapMS = now()
             @mode = ModeType.VISIBILITY
             @penValue = NONE
-          else
-            @highlightingValues = true
         else
           @highlightingValues = false
           @lastValueTapMS = now()
@@ -483,13 +532,13 @@ class SudokuView
       # Also, if double tap, then turn on highlighting values
       when ModeType.PEN
         if (@penValue == action.value)
-          if not @doubleTapDetected()
+          if @doubleTapDetected()
+            @highlightingValues = true
+          else
             @highlightingValues = false
             @lastValueTapMS = now()
             @mode = ModeType.VISIBILITY
             @penValue = NONE
-          else
-            @highlightingValues = true
         else
           @highlightingValues = false
           @lastValueTapMS = now()
@@ -581,7 +630,7 @@ class SudokuView
         if (flashX? && flashY?)
           setTimeout =>
             @draw()
-          , 33
+          , FLASH_INTERVAL_MS
     return
 
   key: (k) ->
