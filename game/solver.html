@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>Bad Guy Sudoku Solver</title>
+<style>
+    body {
+        font-family: monospace;
+        background-color: #000;
+        color: #fff;
+        text-align: center;
+    }
+
+    #game {
+        font-family: monospace;
+        background-color: #333;
+        color: #fff;
+    }
+
+    #solution {
+        font-family: monospace;
+        background-color: #000;
+        color: #fff;
+        font-size: 1.6em;
+        white-space: pre;
+    }
+</style>
+</head>
+<body>
+<div id="heading">Paste your game string here and hit Enter:</div>
+<form method="GET" action="solver.html">
+<input type="text" id="game" name="game" value="" size="83">
+</form>
+<div id="solution"></div>
+<script src="lib/websolver.js"></script>
+<script>
+    var game = qs("game");
+    if(game) {
+        document.getElementById("game").value = game;
+        var solution = solve(game);
+        var html = solution;
+        document.getElementById("solution").innerHTML = html;
+    }
+</script>
+</body>
+</html>

@@ -37,6 +37,30 @@ buildGame = (callback) ->
     else
       util.log "\x07Game compilation failed: " + err
 
+buildWebSolver = (callback) ->
+  # equal of command line $ "browserify --debug -t coffeeify ./src/websolver.coffee > bundle.js "
+  productionBuild = (process.env.NODE_ENV == 'production')
+  opts = {
+    extensions: ['.coffee']
+  }
+  if not productionBuild
+    opts.debug = true
+  b = browserify opts
+  b.add './game/src/websolver.coffee'
+  b.transform coffeeify
+  if productionBuild
+    b.transform { global: true, ignore: ['**/websolver.*'] }, uglifyify
+  b.bundle (err, result) ->
+    if not err
+      fs.writeFile "game/lib/websolver.js", result, (err) ->
+        if not err
+          util.log "Web solver compilation finished."
+          callback?()
+        else
+          util.log "\x07Web solver bundle write failed: " + err
+    else
+      util.log "\x07Web solver compilation failed: " + err
+
 buildSolver = (callback) ->
   # equal of command line $ "browserify --debug -t coffeeify ./src/main.coffee > bundle.js "
   productionBuild = (process.env.NODE_ENV == 'production')
@@ -78,9 +102,10 @@ buildVersion = (callback) ->
 buildEverything = (callback) ->
   buildVersion ->
     buildGame ->
-      buildSolver ->
-        buildAppCache ->
-          callback?()
+      buildWebSolver ->
+        buildSolver ->
+          buildAppCache ->
+            callback?()
 
 getVersion = ->
   return JSON.parse(fs.readFileSync("package.json", "utf8")).version
