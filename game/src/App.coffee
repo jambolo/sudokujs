@@ -147,7 +147,7 @@ class App
       y: (P1.y + P2.y) / 2
 
     # Determine the distance from M to P1
-    dMP1 = Math.sqrt((P1.x - M.x)*(P1.x - M.x) + (P1.y - M.y)*(P1.y - M.y))
+    dMP1 = Math.sqrt((P1.x - M.x) * (P1.x - M.x) + (P1.y - M.y) * (P1.y - M.y))
 
     # Validate the radius
     if not radius? or radius < dMP1
@@ -162,7 +162,7 @@ class App
     uMQ = { x: -uMP1.y, y: uMP1.x }
 
     # Determine the distance from the center of the circle (C) to M
-    dCM = Math.sqrt(radius*radius - dMP1*dMP1)
+    dCM = Math.sqrt(radius * radius - dMP1 * dMP1)
 
     # Determine the distance from M to Q
     dMQ = dMP1 * dMP1 / dCM
@@ -184,7 +184,7 @@ class App
   drawPoint: (x, y, r, color) ->
     @ctx.beginPath()
     @ctx.fillStyle = color
-    @ctx.arc(x, y, r, 0, 2*Math.PI)
+    @ctx.arc(x, y, r, 0, 2 * Math.PI)
     @ctx.fill()
     return
 
@@ -192,11 +192,11 @@ CanvasRenderingContext2D.prototype.roundRect = (x, y, w, h, r) ->
   if (w < 2 * r) then r = w / 2
   if (h < 2 * r) then r = h / 2
   @beginPath()
-  @moveTo(x+r, y)
-  @arcTo(x+w, y,   x+w, y+h, r)
-  @arcTo(x+w, y+h, x,   y+h, r)
-  @arcTo(x,   y+h, x,   y,   r)
-  @arcTo(x,   y,   x+w, y,   r)
+  @moveTo(x + r, y)
+  @arcTo(x + w, y,     x + w, y + h, r)
+  @arcTo(x + w, y + h, x,     y + h, r)
+  @arcTo(x,     y + h, x,     y,     r)
+  @arcTo(x,     y,     x + w, y,     r)
   @closePath()
   return this
 

@@ -9,7 +9,7 @@ shuffle = (a) ->
 
 class Board
   constructor: (otherBoard = null) ->
-    @lockedCount = 0;
+    @lockedCount = 0
     @grid = new Array(9).fill(null)
     @locked = new Array(9).fill(null)
     for i in [0...9]
@@ -34,7 +34,7 @@ class Board
       @lockedCount += 1 if not @locked[x][y]
     else
       @lockedCount -= 1 if @locked[x][y]
-    @locked[x][y] = v;
+    @locked[x][y] = v
 
 
 class SudokuGenerator
@@ -150,7 +150,7 @@ class SudokuGenerator
     return true if unlockedCount == 0
 
     # check for a second solution
-    return @solveInternal(solved, attempts, unlockedCount-1) == null
+    return @solveInternal(solved, attempts, unlockedCount - 1) == null
 
   solveInternal: (solved, attempts, walkIndex = 0) ->
     unlockedCount = 81 - solved.lockedCount

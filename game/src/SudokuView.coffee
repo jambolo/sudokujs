@@ -182,7 +182,7 @@ class SudokuView
     @actions[index] = { type: ActionType.REDO }
 
     # Mode switch
-    for i in [(MODE_POS_Y*9)+MODE_START_POS_X..(MODE_POS_Y*9)+MODE_END_POS_X]
+    for i in [(MODE_POS_Y * 9) + MODE_START_POS_X..(MODE_POS_Y * 9) + MODE_END_POS_X]
       @actions[i] = { type: ActionType.MODE }
 
     return
@@ -293,6 +293,11 @@ class SudokuView
     return
 
   drawGrid: (originX, originY, size, solved = false) ->
+    left = @cellSize * (originX + 0)
+    right = @cellSize * (originX + size)
+    top = @cellSize * (originY + 0)
+    bottom = @cellSize * (originY + size)
+
     for i in [0..size]
       color = if solved then "green" else "black"
       lineWidth = @lineWidthThin
@@ -300,10 +305,12 @@ class SudokuView
         lineWidth = @lineWidthThick
 
       # Horizontal lines
-      @app.drawLine(@cellSize * (originX + 0), @cellSize * (originY + i), @cellSize * (originX + size), @cellSize * (originY + i), color, lineWidth)
+      y = @cellSize * (originY + i)
+      @app.drawLine(left, y, right, y, color, lineWidth)
 
       # Vertical lines
-      @app.drawLine(@cellSize * (originX + i), @cellSize * (originY + 0), @cellSize * (originX + i), @cellSize * (originY + size), color, lineWidth)
+      x = @cellSize * (originX + i)
+      @app.drawLine(x, top, x, bottom, color, lineWidth)
     return
 
   drawLink: (startX, startY, endX, endY, color, lineWidth, v) ->
@@ -313,12 +320,28 @@ class SudokuView
     x2 = endX * @cellSize + offset.x
     y2 = endY * @cellSize + offset.y
 
-    # Ensure that the arc curves toward the center
-    if (@centerX - x1) * (y2 - y1) - (@centerY - y1) * (x2 - x1) < 0
+    # Ensure that the arc curves inward for marks nearer the outside and curves outward for marks nearer the center.
+    
+    # If the distance from the center to the midpoint of the line is greater than the distance from the center to the midpoint of
+    # the squares, then the line curves toward the center.
+    lineMidX = (x1 + x2) / 2
+    lineMidY = (y1 + y2) / 2
+    squaresMidX = @cellSize * (startX + endX + 1) / 2
+    squaresMidY = @cellSize * (startY + endY + 1) / 2
+
+    lineDist2 = (@centerX - lineMidX) * (@centerX - lineMidX) + (@centerY - lineMidY) * (@centerY - lineMidY)
+    squaresDist2 = (@centerX - squaresMidX) * (@centerX - squaresMidX) + (@centerY - squaresMidY) * (@centerY - squaresMidY)
+
+    centerIsLeft = (@centerX - x1) * (y2 - y1) - (@centerY - y1) * (x2 - x1) < 0
+
+    # When the grid center is left of the line, then the curve is automatically outward, so we have to swap if we want an inward
+    # curve, and vice versa
+    if (centerIsLeft && lineDist2 > squaresDist2) || (!centerIsLeft && lineDist2 < squaresDist2)
       [x1, x2] = [x2, x1]
       [y1, y2] = [y2, y1]
 
-    r = 1.3 * Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) # 1.3 gives the most curve minimizing overlap of marks in other cells
+    curvature = 2.5 # 2.5 gives the most curve without overlapping other cells
+    r = curvature * Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
     @app.drawArc(x1, y1, x2, y2, r, color, lineWidth)
     @app.drawPoint(x1, y1, @linkDotRadius, color)
     @app.drawPoint(x2, y2, @linkDotRadius, color)
@@ -640,13 +663,15 @@ class SudokuView
         @handlePencilAction({ value: @penValue })
       else if @mode == ModeType.PENCIL
         @handlePenAction({ value: @penValue })
+      else if @mode == ModeType.LINKS
+        @handleModeAction()
       @draw()
     else if KEY_MAPPING[k]?
       mapping = KEY_MAPPING[k]
       usePencil = @preferPencil
       if mapping.shift
         usePencil = !usePencil
-      if usePencil
+      if usePencil or @mode == ModeType.LINKS
         @handlePencilAction({ value: mapping.v })
       else
         @handlePenAction({ value: mapping.v })

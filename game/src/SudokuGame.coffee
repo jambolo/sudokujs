@@ -15,7 +15,7 @@ ascendingLinkSort = (a, b) ->
 uniqueLinkFilter = (e, i, a) ->
   if i == 0
     return true
-  p = a[i-1]
+  p = a[i - 1]
   e0 = cellIndex(e.cells[0].x, e.cells[0].y)
   e1 = cellIndex(e.cells[1].x, e.cells[1].y)
   p0 = cellIndex(p.cells[0].x, p.cells[0].y)
@@ -25,8 +25,8 @@ uniqueLinkFilter = (e, i, a) ->
 generateLinkPermutations = (cells) ->
   links = []
   count = cells.length
-  for i in [0...count-1]
-    for j in [i+1...count]
+  for i in [0...count - 1]
+    for j in [i + 1...count]
       links.push({ cells: [cells[i], cells[j]] })
   return links
 
@@ -165,7 +165,7 @@ class SudokuGame
     for j in [0...9]
       for i in [0...9]
         if @grid[i][j].value != 0
-          counts[@grid[i][j].value-1] += 1
+          counts[@grid[i][j].value - 1] += 1
 
     for i in [0...9]
       if counts[i] == 9
@@ -186,7 +186,7 @@ class SudokuGame
       switch action
         when "togglePencil"
           journal.push { action: "togglePencil", x: x, y: y, values: values }
-          cell.pencil[v-1] = !cell.pencil[v-1] for v in values
+          cell.pencil[v - 1] = !cell.pencil[v - 1] for v in values
         when "setValue"
           journal.push { action: "setValue", x: x, y: y, values: [cell.value] }
           cell.value = values[0]
@@ -209,7 +209,7 @@ class SudokuGame
     cell = @grid[x][y]
     if cell.locked
       return
-    @do "togglePencil", x, y, (i+1 for flag, i in cell.pencil when flag), @undoJournal
+    @do "togglePencil", x, y, (i + 1 for flag, i in cell.pencil when flag), @undoJournal
     @redoJournal = []
 
   togglePencil: (x, y, v) ->
@@ -272,11 +272,11 @@ class SudokuGame
 
     return { strong, weak }
 
-  getRowLinks: (y, value)->
+  getRowLinks: (y, value) ->
     cells = []
     for x in [0...9]
       cell = @grid[x][y]
-      if cell.value == 0 and cell.pencil[value-1]
+      if cell.value == 0 and cell.pencil[value - 1]
         cells.push({ x, y })
 
     if cells.length > 1
@@ -287,11 +287,11 @@ class SudokuGame
       links = []
     return links
 
-  getColumnLinks: (x, value)->
+  getColumnLinks: (x, value) ->
     cells = []
     for y in [0...9]
       cell = @grid[x][y]
-      if cell.value == 0 and cell.pencil[value-1]
+      if cell.value == 0 and cell.pencil[value - 1]
         cells.push({ x, y })
 
     if cells.length > 1
@@ -306,10 +306,10 @@ class SudokuGame
     cells = []
     sx = boxX * 3
     sy = boxY * 3
-    for y in [sy...sy+3]
-      for x in [sx...sx+3]
+    for y in [sy...sy + 3]
+      for x in [sx...sx + 3]
         cell = @grid[x][y]
-        if cell.value == 0 and cell.pencil[value-1]
+        if cell.value == 0 and cell.pencil[value - 1]
           cells.push({ x, y })
 
     if cells.length > 1
