@@ -24,6 +24,9 @@ UNDO_POS_Y = 13
 REDO_POS_X = 8
 REDO_POS_Y = 13
 
+CHECK_POS_X = 8
+CHECK_POS_Y = 9
+
 Color =
   value: "black"
   pencil: "#0000ff"
@@ -41,6 +44,7 @@ Color =
   modePen: "#000000"
   modePencil: "#0000ff"
   modeLinks: "#cc3333"
+  modeCheck: "#ff0000"
 
 ActionType =
   SELECT: 0
@@ -50,6 +54,7 @@ ActionType =
   UNDO: 4
   REDO: 5
   MODE: 6
+  CHECK: 7
 
 ModeType =
   VISIBILITY: 0
@@ -185,6 +190,10 @@ class SudokuView
     for i in [(MODE_POS_Y * 9) + MODE_START_POS_X..(MODE_POS_Y * 9) + MODE_END_POS_X]
       @actions[i] = { type: ActionType.MODE }
 
+    # Check button
+    index = (CHECK_POS_Y * 9) + CHECK_POS_X
+    @actions[index] = { type: ActionType.CHECK }
+
     return
 
   resetState: ->
@@ -277,11 +286,11 @@ class SudokuView
     if backgroundColor != null
       @app.drawFill(px, py, @cellSize, @cellSize, backgroundColor)
     for m in marks
-      offset = @markOffset(m)
+      offset = @markOffset(m.value)
       mx = px + offset.x
       my = py + offset.y
-      text = String(m)
-      @app.drawTextCentered(text, mx, my, @fonts.pencil, Color.pencil)
+      text = String(m.value)
+      @app.drawTextCentered(text, mx, my, @fonts.pencil, m.color)
     return
 
   drawSolvedCell: (x, y, backgroundColor, color, value) ->
@@ -370,9 +379,16 @@ class SudokuView
           backgroundColor = @chooseBackgroundColor(i, j, cell.value, cell.locked, marks)
 
           if cell.value == 0
-            @drawUnsolvedCell(i, j, backgroundColor, marks)
+            if @mode == ModeType.CHECK
+              coloredMarks = ({ value: m, color: if @game.markIsGood(i, j, m) then Color.pencil else Color.error } for m in marks)
+            else
+              coloredMarks = ({ value: m, color: Color.pencil } for m in marks)
+            @drawUnsolvedCell(i, j, backgroundColor, coloredMarks)
           else
-            textColor = if cell.error then Color.error else Color.value
+            if @mode == ModeType.CHECK
+              textColor = if @game.solution[i][j] == cell.value then Color.value else Color.error
+            else
+              textColor = if cell.error then Color.error else Color.value
             @drawSolvedCell(i, j, backgroundColor, textColor, cell.value)
 
     # Draw links in LINKS mode
@@ -431,11 +447,16 @@ class SudokuView
       when ModeType.LINKS
         modeColor = Color.modeLinks
         modeText = "Links"
+      when ModeType.CHECK
+        modeColor = Color.modeCheck
+        modeText = "Checking"
+
     @drawCell(MODE_CENTER_POS_X, MODE_POS_Y, null, modeText, @fonts.menu, modeColor)
 
     @drawCell(MENU_POS_X, MENU_POS_Y, null, "Menu", @fonts.menu, Color.menu)
     @drawCell(UNDO_POS_X, UNDO_POS_Y, null, "\u{25c4}", @fonts.menu, Color.menu) if (@game.undoJournal.length > 0)
     @drawCell(REDO_POS_X, REDO_POS_Y, null, "\u{25ba}", @fonts.menu, Color.menu) if (@game.redoJournal.length > 0)
+    @drawCell(CHECK_POS_X, CHECK_POS_Y, null, "\u{2714}", @fonts.menu, Color.error)
 
     # Make the grids
     @drawGrid(0, 0, 9, @game.solved)
@@ -536,6 +557,7 @@ class SudokuView
           @highlightingValues = false
           @lastValueTapMS = now()
           @penValue = action.value
+        @preferPencil = true # Make sure the keyboard is also in pencil mode
 
       # Otherwise, switch to PENCIL
       else
@@ -547,6 +569,7 @@ class SudokuView
           @lastValueTapMS = now()
         @mode = ModeType.PENCIL
         @penValue = action.value
+        @preferPencil = true # Make sure the keyboard is also in pencil mode
     return
 
   handlePenAction: (action) ->
@@ -566,6 +589,7 @@ class SudokuView
           @highlightingValues = false
           @lastValueTapMS = now()
           @penValue = action.value
+        @preferPencil = false # Make sure the keyboard is also in pen mode
 
       # Ignored in LINKS
       when ModeType.LINKS
@@ -581,6 +605,7 @@ class SudokuView
           @lastValueTapMS = now()
         @mode = ModeType.PEN
         @penValue = action.value
+        @preferPencil = false # Make sure the keyboard is also in pen mode
 
     # Make sure any visibility highlighting is off and links are cleared.
     @visibilityX = -1
@@ -590,10 +615,10 @@ class SudokuView
     return
 
   handleUndoAction: ->
-    return @game.undo() if @mode isnt ModeType.LINKS
+    return @game.undo() if @mode isnt ModeType.LINKS and @mode isnt ModeType.CHECK
 
   handleRedoAction: ->
-    return @game.redo() if @mode isnt ModeType.LINKS
+    return @game.redo() if @mode isnt ModeType.LINKS and @mode isnt ModeType.CHECK
 
   handleModeAction: ->
     switch @mode
@@ -603,8 +628,19 @@ class SudokuView
         @mode = ModeType.PEN
       when ModeType.PEN
         @mode = ModeType.VISIBILITY
-      when ModeType.LINKS
+      when ModeType.LINKS, ModeType.CHECK
         @mode = ModeType.PENCIL
+    @visibilityX = -1
+    @visibilityY = -1
+    @penValue = NONE
+    @strongLinks = []
+    @weakLinks = []
+    @highlightingValues = false
+    @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS    # Ensure that the next tap is not a double tap
+    return
+
+  handleCheckAction: ->
+    @mode = ModeType.CHECK
     @visibilityX = -1
     @visibilityY = -1
     @penValue = NONE
@@ -638,6 +674,7 @@ class SudokuView
             when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction()
             when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction()
             when ActionType.MODE then @handleModeAction()
+            when ActionType.CHECK then @handleCheckAction()
         else
           # no action, default to VISIBILITY mode
           @mode = ModeType.VISIBILITY

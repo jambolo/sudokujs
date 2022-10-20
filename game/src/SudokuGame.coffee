@@ -320,6 +320,27 @@ class SudokuGame
       links = []
     return links
 
+  markIsGood: (x, y, m) ->
+    # Check if this mark is a known value in the column
+    for j in [0...9] when j isnt y
+      if @grid[x][j].value == m
+        return false
+
+    # Check if this mark is a known value in the row
+    for i in [0...9] when i isnt x
+      if @grid[i][y].value == m
+        return false
+
+    # Check if this mark is a known value in the box
+    sx = Math.floor(x / 3) * 3
+    sy = Math.floor(y / 3) * 3
+    for i in [sx...sx + 3]
+      for j in [sy...sy + 3]
+        if (i != x || j != y) && @grid[i][j].value == m
+          return false
+  
+    return true
+
   newGame: (difficulty) ->
     console.log "newGame(#{difficulty})"
     for j in [0...9]
@@ -332,7 +353,7 @@ class SudokuGame
           cell.pencil[k] = false
 
     generator = new SudokuGenerator()
-    newGrid = generator.generate(difficulty)
+    [ newGrid, @solution ] = generator.generate(difficulty)
     # console.log "newGrid", newGrid
     for j in [0...9]
       for i in [0...9]
@@ -365,7 +386,7 @@ class SudokuGame
         dst.locked = if src.l > 0 then true else false
         for k in [0...9]
           dst.pencil[k] = if src.p[k] > 0 then true else false
-
+    @solution = gameData.solution
     @updateCells()
     console.log "Loaded game."
     return true
@@ -377,8 +398,11 @@ class SudokuGame
 
     gameData =
       grid: new Array(9).fill(null)
+      solution: new Array(9).fill(null)
+
     for i in [0...9]
       gameData.grid[i] = new Array(9).fill(null)
+      gameData.solution[i] = new Array(9).fill(null)
 
     for j in [0...9]
       for i in [0...9]
@@ -391,6 +415,11 @@ class SudokuGame
         dst = gameData.grid[i][j].p
         for k in [0...9]
           dst.push(if cell.pencil[k] then 1 else 0)
+
+    for i in [0...9]
+      gameData.solution[i] = new Array(9).fill(null)
+      for j in [0...9]
+        gameData.solution[i][j] = @solution[i][j]
 
     jsonString = JSON.stringify(gameData)
     localStorage.setItem("game", jsonString)

@@ -186,6 +186,8 @@ class SudokuGenerator
       for i in [0...9]
         board.lock(i, j)
 
+    solution = new Board(board)
+
     indexesToRemove = shuffle([0...81])
     removed = 0
     while removed < amountToRemove
@@ -208,8 +210,9 @@ class SudokuGenerator
         # console.log "failed to remove #{rx},#{ry}, creates non-unique solution"
 
     return {
-      board: board
-      removed: removed
+      board
+      removed
+      solution
     }
 
   generate: (difficulty) ->
@@ -234,7 +237,7 @@ class SudokuGenerator
       console.log "current best #{best.removed} / #{amountToRemove}"
 
     console.log "giving user board: #{best.removed} / #{amountToRemove}"
-    return @boardToGrid(best.board)
+    return [@boardToGrid(best.board), @boardToGrid(best.solution)]
 
   validateGrid: (grid) ->
     return @hasUniqueSolution(@gridToBoard(grid))
