@@ -95,20 +95,14 @@ KEY_MAPPING =
   '*': { v: 8, shift: true }
   '(': { v: 9, shift: true }
 
-# Celebration color palette
-CELEBRATION_COLORS = [
-  "#7f7fff",
-  "#7fff7f",
-  "#7fffff",
-  "#7f7f3f",
-  "#ff7f7f",
-  "#ff7fff",
-  "#ffff7f",
-  "#ffffff"
-]
+CELEBRATION_DELAY_MS = 100      # Time for the celebration wave to cross one cell
+CELEBRATION_PULSE_MS = 455      # Time a cell stays lit as the wave passes
+CELEBRATION_ALPHA = 0.8         # Opacity of the tint at the peak of the wave
+CELEBRATION_POP = 0.20          # Growth of a value at the peak of the wave
+CELEBRATION_HUE = 90            # Hue of the tint at the origin of the wave
+CELEBRATION_HUE_STEP = 15       # Change in hue per cell of distance
 
-CELEBRATION_STEPS = 30          # Number of color changes in a celebration
-CELEBRATION_INTERVAL_MS = 33    # Time between celebration color changes
+PEN_FONT_SCALE = 0.8            # Height of a value relative to its cell
 
 FLASH_INTERVAL_MS = 33          # Length of flash
 
@@ -135,7 +129,7 @@ class SudokuView
     @fonts =
       pencil: @app.font(@cellSize * 0.3)
       menu:   @app.font(@cellSize * 0.5)
-      pen:    @app.font(@cellSize * 0.8)
+      pen:    @app.font(@cellSize * PEN_FONT_SCALE)
     return
 
   initActions: ->
@@ -196,36 +190,56 @@ class SudokuView
     @weakLinks = []
     @highlightingValues = false
     @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS  # Ensure the next tap is not a double tap
-    clearTimeout(@celebrationTimer) if @celebrationTimer?
-    @celebrationTimer = null
-    @celebrationCount = 0                             # > 0 while celebrating
+    @stopCelebration()
 
   # -------------------------------------------------------------------------------------
   # Rendering
 
-  # Starts the celebration, or restarts it if it is already running
-  startCelebration: ->
-    @celebrationCount = CELEBRATION_STEPS
-    if not @celebrationTimer?
-      @celebrationTimer = setTimeout (=> @celebrate()), CELEBRATION_INTERVAL_MS
+  # Starts a wave spreading from the cell, or restarts it if it is already running
+  startCelebration: (x, y) ->
+    @celebrationX = x
+    @celebrationY = y
+    @celebrationStart = now()
+
+    # The celebration ends when the wave has passed the farthest corner
+    farthest = Math.hypot(Math.max(x, 8 - x), Math.max(y, 8 - y))
+    @celebrationDuration = farthest * CELEBRATION_DELAY_MS + CELEBRATION_PULSE_MS
+
+    @celebrationFrame ?= requestAnimationFrame(=> @celebrate())
     return
 
-  # Advances the celebration one step
+  stopCelebration: ->
+    cancelAnimationFrame(@celebrationFrame) if @celebrationFrame?
+    @celebrationFrame = null
+    @celebrationStart = null
+    return
+
+  # Draws the next frame of the celebration
   celebrate: ->
-    @celebrationTimer = null
-    return if @celebrationCount <= 0
-    --@celebrationCount
+    @celebrationFrame = null
+    return if not @celebrationStart?
+    if now() - @celebrationStart >= @celebrationDuration
+      @celebrationStart = null
     @draw() if @app.view is this
-    if @celebrationCount > 0
-      @celebrationTimer = setTimeout (=> @celebrate()), CELEBRATION_INTERVAL_MS
+    if @celebrationStart?
+      @celebrationFrame = requestAnimationFrame(=> @celebrate())
     return
 
-  chooseCelebrationColor: (value) ->
-    color = null
-    if value > 0 and @celebrationCount > 0
-      index = (value + @celebrationCount - 2) % 8
-      color = CELEBRATION_COLORS[index]
-    return color
+  # Returns the distance of a cell from the origin of the celebration wave
+  celebrationDistance: (x, y) ->
+    return Math.hypot(x - @celebrationX, y - @celebrationY)
+
+  # Returns how strongly a cell is lit by the celebration wave, from 0 to 1
+  celebrationLevel: (x, y) ->
+    return 0 if not @celebrationStart?
+    t = now() - @celebrationStart - @celebrationDistance(x, y) * CELEBRATION_DELAY_MS
+    return 0 if t <= 0 or t >= CELEBRATION_PULSE_MS
+    return Math.sin(Math.PI * t / CELEBRATION_PULSE_MS)
+
+  # Returns the tint of a cell lit by the celebration wave
+  celebrationColor: (x, y, level) ->
+    hue = CELEBRATION_HUE + @celebrationDistance(x, y) * CELEBRATION_HUE_STEP
+    return "hsla(#{Math.round(hue)}, 80%, 60%, #{(level * CELEBRATION_ALPHA).toFixed(3)})"
 
   chooseBackgroundColor: (i, j, value, locked, marks) ->
     color = null
@@ -254,10 +268,6 @@ class SudokuView
       when ModeType.PENCIL
         if @highlightingValues and value == 0 and @penValue in marks
           color = Color.backgroundSelected
-
-    # Override if celebrating
-    if @celebrationCount > 0
-      color = @chooseCelebrationColor(value)
 
     return color
 
@@ -299,7 +309,15 @@ class SudokuView
     py = y * @cellSize
     if backgroundColor != null
       @app.drawFill(px, py, @cellSize, @cellSize, backgroundColor)
-    @app.drawTextCentered(String(value), px + (@cellSize / 2), py + (@cellSize / 2), @fonts.pen, color)
+
+    # A cell lit by the celebration wave is tinted and its value grows
+    font = @fonts.pen
+    level = @celebrationLevel(x, y)
+    if level > 0
+      @app.drawFill(px, py, @cellSize, @cellSize, @celebrationColor(x, y, level))
+      font = @app.font(@cellSize * PEN_FONT_SCALE * (1 + CELEBRATION_POP * level))
+
+    @app.drawTextCentered(String(value), px + (@cellSize / 2), py + (@cellSize / 2), font, color)
     return
 
   drawGrid: (originX, originY, size, solved = false) ->
@@ -667,8 +685,11 @@ class SudokuView
       # no action, default to VISIBILITY mode
       @resetMode(ModeType.VISIBILITY)
 
-    # Celebrate when the puzzle becomes solved
-    @startCelebration() if @game.solved and not wasSolved
+    # Celebrate from the changed cell when the puzzle becomes solved
+    if not @game.solved
+      @stopCelebration()
+    else if not wasSolved
+      @startCelebration(flashX ? 4, flashY ? 4)
 
     @draw(flashX, flashY)
     if (flashX? && flashY?)

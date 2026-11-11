@@ -55,13 +55,15 @@ almostSolve = (view) ->
 
 # Runs the timers until any celebration is over
 finishTimers = ->
-  mock.timers.tick(50) for i in [0...50]
+  mock.timers.tick(50) for i in [0...100]
   return
 
 beforeEach ->
   installStorage()
   mock.timers.reset()
   mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  globalThis.requestAnimationFrame = (f) -> setTimeout(f, 16)
+  globalThis.cancelAnimationFrame = (id) -> clearTimeout(id)
 
 test 'layout follows the canvas size', ->
   view = newView()
@@ -99,24 +101,51 @@ test 'keys follow the mode label', ->
 test 'celebrates each time the puzzle becomes solved, but not on load', ->
   view = newView()
   almostSolve(view)
-  assert.equal(view.celebrationCount, 0)
+  assert.equal(view.celebrationStart, null)
   clickCell(view, 2, 0)
   assert.equal(view.game.solved, true)
-  assert.ok(view.celebrationCount > 0)
+  assert.ok(view.celebrationStart?)
   finishTimers()
-  assert.equal(view.celebrationCount, 0)
+  assert.equal(view.celebrationStart, null)
 
   clickCell(view, 0, 13)                              # undo
-  assert.equal(view.celebrationCount, 0)
+  assert.equal(view.celebrationStart, null)
   clickCell(view, 8, 13)                              # redo
-  assert.ok(view.celebrationCount > 0)
+  assert.ok(view.celebrationStart?)
   finishTimers()
 
   reloaded = quietly -> new SudokuView(view.app, view.canvas)
   reloaded.layout()
   reloaded.draw()
   assert.equal(reloaded.game.solved, true)
-  assert.equal(reloaded.celebrationCount, 0)
+  assert.equal(reloaded.celebrationStart, null)
+
+test 'the celebration wave spreads from the last cell', ->
+  view = newView()
+  almostSolve(view)
+  clickCell(view, 2, 0)
+  assert.equal(view.celebrationLevel(2, 0), 0)
+  mock.timers.tick(228)
+  assert.ok(view.celebrationLevel(2, 0) > 0.99)
+  assert.equal(view.celebrationLevel(8, 8), 0)
+  mock.timers.tick(900)
+  assert.equal(view.celebrationLevel(2, 0), 0)
+  assert.ok(view.celebrationLevel(8, 8) > 0)
+  assert.match(view.celebrationColor(8, 8, 1), /^hsla\(\d+, 80%, 60%, 0\.800\)$/)
+  finishTimers()
+  assert.equal(view.celebrationStart, null)
+  assert.equal(view.celebrationLevel(8, 8), 0)
+
+test 'undoing the solution stops the celebration', ->
+  view = newView()
+  almostSolve(view)
+  clickCell(view, 2, 0)
+  clickCell(view, 0, 13)                              # undo
+  assert.equal(view.celebrationStart, null)
+  mock.timers.tick(50)                                # flash redraw
+  count = view.app.drawCount
+  finishTimers()
+  assert.equal(view.app.drawCount, count)
 
 test 'the celebration does not draw over the menu', ->
   view = newView()
@@ -126,7 +155,7 @@ test 'the celebration does not draw over the menu', ->
   count = view.app.drawCount
   finishTimers()
   assert.equal(view.app.drawCount, count)
-  assert.equal(view.celebrationCount, 0)
+  assert.equal(view.celebrationStart, null)
 
 test 'menu buttons need the click inside them', ->
   app = new FakeApp
