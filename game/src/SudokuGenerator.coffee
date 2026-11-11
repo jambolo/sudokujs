@@ -239,8 +239,34 @@ class SudokuGenerator
     console.log "giving user board: #{best.removed} / #{amountToRemove}"
     return [@boardToGrid(best.board), @boardToGrid(best.solution)]
 
+  # Returns true if any two locked cells in the same row, column, or box have the same value
+  hasConflicts: (board) ->
+    for y in [0...9]
+      for x in [0...9]
+        continue if not board.locked[x][y]
+        v = board.grid[x][y]
+        sx = Math.floor(x / 3) * 3
+        sy = Math.floor(y / 3) * 3
+        for i in [0...9]
+          return true if (i != x) and board.locked[i][y] and (board.grid[i][y] == v)
+          return true if (i != y) and board.locked[x][i] and (board.grid[x][i] == v)
+          bx = sx + (i % 3)
+          by_ = sy + (i // 3)
+          return true if ((bx != x) or (by_ != y)) and board.locked[bx][by_] and (board.grid[bx][by_] == v)
+    return false
+
   validateGrid: (grid) ->
-    return @hasUniqueSolution(@gridToBoard(grid))
+    board = @gridToBoard(grid)
+    return false if @hasConflicts(board)
+    return @hasUniqueSolution(board)
+
+  # Returns the solved grid, or null if there is no solution
+  solveGrid: (grid) ->
+    board = @gridToBoard(grid)
+    return null if @hasConflicts(board)
+    solved = @solve(board)
+    return null if solved == null
+    return (column.slice() for column in solved.grid)
 
   solveString: (importString) ->
     if importString.indexOf("SD") != 0
@@ -261,6 +287,10 @@ class SudokuGenerator
         if v > 0
           board.grid[j][i] = v
           board.lock(j, i)
+
+    if @hasConflicts(board)
+      console.log "ERROR: Conflicting givens."
+      return false
 
     solved = @solve(board)
     if solved == null

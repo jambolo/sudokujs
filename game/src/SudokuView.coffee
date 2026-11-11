@@ -61,6 +61,7 @@ ModeType =
   PENCIL: 1
   PEN: 2
   LINKS: 3
+  CHECK: 4
 
 # Special pen/pencil values
 NONE = 0
@@ -330,7 +331,7 @@ class SudokuView
     y2 = endY * @cellSize + offset.y
 
     # Ensure that the arc curves inward for marks nearer the outside and curves outward for marks nearer the center.
-    
+
     # If the distance from the center to the midpoint of the line is greater than the distance from the center to the midpoint of
     # the squares, then the line curves toward the center.
     lineMidX = (x1 + x2) / 2
@@ -620,16 +621,11 @@ class SudokuView
   handleRedoAction: ->
     return @game.redo() if @mode isnt ModeType.LINKS and @mode isnt ModeType.CHECK
 
-  handleModeAction: ->
-    switch @mode
-      when ModeType.VISIBILITY
-        @mode = ModeType.LINKS
-      when ModeType.PENCIL
-        @mode = ModeType.PEN
-      when ModeType.PEN
-        @mode = ModeType.VISIBILITY
-      when ModeType.LINKS, ModeType.CHECK
-        @mode = ModeType.PENCIL
+  # Switches to a mode with nothing selected, keeping the keyboard in sync with pen and pencil modes
+  resetMode: (mode) ->
+    @mode = mode
+    @preferPencil = true if mode is ModeType.PENCIL
+    @preferPencil = false if mode is ModeType.PEN
     @visibilityX = -1
     @visibilityY = -1
     @penValue = NONE
@@ -639,15 +635,20 @@ class SudokuView
     @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS    # Ensure that the next tap is not a double tap
     return
 
+  handleModeAction: ->
+    switch @mode
+      when ModeType.VISIBILITY
+        @resetMode(ModeType.LINKS)
+      when ModeType.PENCIL
+        @resetMode(ModeType.PEN)
+      when ModeType.PEN
+        @resetMode(ModeType.VISIBILITY)
+      when ModeType.LINKS, ModeType.CHECK
+        @resetMode(ModeType.PENCIL)
+    return
+
   handleCheckAction: ->
-    @mode = ModeType.CHECK
-    @visibilityX = -1
-    @visibilityY = -1
-    @penValue = NONE
-    @strongLinks = []
-    @weakLinks = []
-    @highlightingValues = false
-    @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS    # Ensure that the next tap is not a double tap
+    @resetMode(ModeType.CHECK)
     return
 
   click: (x, y) ->
@@ -668,23 +669,16 @@ class SudokuView
             return
 
           switch action.type
-            when ActionType.SELECT then [ flashX, flashY ] = @handleSelectAction(action)
+            when ActionType.SELECT then [ flashX, flashY ] = @handleSelectAction(action) ? []
             when ActionType.PENCIL then @handlePencilAction(action)
             when ActionType.PEN then @handlePenAction(action)
-            when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction()
-            when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction()
+            when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction() ? []
+            when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction() ? []
             when ActionType.MODE then @handleModeAction()
             when ActionType.CHECK then @handleCheckAction()
         else
           # no action, default to VISIBILITY mode
-          @mode = ModeType.VISIBILITY
-          @visibilityX = -1
-          @visibilityY = -1
-          @penValue = NONE
-          @strongLinks = []
-          @weakLinks = []
-          @highlightingValues = false
-          @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS    # Ensure that the next tap is not a double tap
+          @resetMode(ModeType.VISIBILITY)
 
         @draw(flashX, flashY)
         if (flashX? && flashY?)

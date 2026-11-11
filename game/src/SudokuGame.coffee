@@ -30,6 +30,18 @@ generateLinkPermutations = (cells) ->
       links.push({ cells: [cells[i], cells[j]] })
   return links
 
+# Version of the saved game format
+SAVE_VERSION = 2
+
+# Returns true if the value is a completely filled 9x9 grid
+isFullGrid = (grid) ->
+  return false if not Array.isArray(grid) or grid.length != 9
+  for column in grid
+    return false if not Array.isArray(column) or column.length != 9
+    for v in column
+      return false if not Number.isInteger(v) or v < 1 or v > 9
+  return true
+
 class SudokuGame
   constructor: ->
     @clear()
@@ -71,16 +83,6 @@ class SudokuGame
           exportString += "0"
     return exportString
 
-  validate: ->
-    board = new Array(9).fill(null)
-    for i in [0...9]
-      board[i] = new Array(9).fill(0)
-      for j in [0...9]
-        board[i][j] = @grid[i][j].value
-
-    generator = new SudokuGenerator
-    return generator.validateGrid(board)
-
   import: (importString) ->
     if importString.indexOf("SD") != 0
       return false
@@ -89,19 +91,28 @@ class SudokuGame
     if importString.length != 81
       return false
 
-    @clear()
+    # Parse and validate before touching the current game
+    values = new Array(9).fill(null)
+    for i in [0...9]
+      values[i] = new Array(9).fill(0)
 
     index = 0
     zeroCharCode = "0".charCodeAt(0)
     for j in [0...9]
       for i in [0...9]
-        v = importString.charCodeAt(index) - zeroCharCode
+        values[i][j] = importString.charCodeAt(index) - zeroCharCode
         index += 1
-        if v > 0
-          @grid[i][j].locked = true
-          @grid[i][j].value = v
 
-    return false if not @validate()
+    generator = new SudokuGenerator
+    return false if not generator.validateGrid(values)
+
+    @clear()
+    @solution = generator.solveGrid(values)
+    for j in [0...9]
+      for i in [0...9]
+        if values[i][j] > 0
+          @grid[i][j].locked = true
+          @grid[i][j].value = values[i][j]
 
     @updateCells()
     @save()
@@ -209,7 +220,10 @@ class SudokuGame
     cell = @grid[x][y]
     if cell.locked
       return
-    @do "togglePencil", x, y, (i + 1 for flag, i in cell.pencil when flag), @undoJournal
+    marks = (i + 1 for flag, i in cell.pencil when flag)
+    if marks.length == 0
+      return
+    @do "togglePencil", x, y, marks, @undoJournal
     @redoJournal = []
 
   togglePencil: (x, y, v) ->
@@ -219,7 +233,7 @@ class SudokuGame
     @redoJournal = []
 
   setValue: (x, y, v) ->
-    if @grid[x][y].locked
+    if @grid[x][y].locked or @grid[x][y].value == v
       return
     @do "setValue", x, y, [v], @undoJournal
     @redoJournal = []
@@ -321,6 +335,9 @@ class SudokuGame
     return links
 
   markIsGood: (x, y, m) ->
+    # The correct mark is always good
+    return true if @solution[x][y] == m
+
     # Check if this mark is a known value in the column
     for j in [0...9] when j isnt y
       if @grid[x][j].value == m
@@ -338,7 +355,7 @@ class SudokuGame
       for j in [sy...sy + 3]
         if (i != x || j != y) && @grid[i][j].value == m
           return false
-  
+
     return true
 
   newGame: (difficulty) ->
@@ -374,19 +391,36 @@ class SudokuGame
       return false
 
     # console.log jsonString
-    gameData = JSON.parse(jsonString)
-    # console.log "found gameData", gameData
+    # A corrupt save is discarded
+    try
+      gameData = JSON.parse(jsonString)
+      # console.log "found gameData", gameData
 
-    for j in [0...9]
-      for i in [0...9]
-        src = gameData.grid[i][j]
-        dst = @grid[i][j]
-        dst.value = src.v
-        dst.error = if src.e > 0 then true else false
-        dst.locked = if src.l > 0 then true else false
-        for k in [0...9]
-          dst.pencil[k] = if src.p[k] > 0 then true else false
-    @solution = gameData.solution
+      if gameData.version > SAVE_VERSION
+        throw new Error("unsupported save version #{gameData.version}")
+
+      for j in [0...9]
+        for i in [0...9]
+          src = gameData.grid[i][j]
+          dst = @grid[i][j]
+          dst.value = src.v
+          dst.error = if src.e > 0 then true else false
+          dst.locked = if src.l > 0 then true else false
+          for k in [0...9]
+            dst.pencil[k] = if src.p[k] > 0 then true else false
+
+      # Saves without a usable solution get one computed from the locked cells
+      @solution = gameData.solution
+      if not isFullGrid(@solution)
+        givens = ((if cell.locked then cell.value else 0) for cell in column for column in @grid)
+        @solution = new SudokuGenerator().solveGrid(givens)
+        if @solution == null
+          throw new Error("saved puzzle has no solution")
+    catch e
+      console.log "Failed to load saved game: #{e.message}"
+      @clear()
+      return false
+
     @updateCells()
     console.log "Loaded game."
     return true
@@ -397,12 +431,12 @@ class SudokuGame
       return false
 
     gameData =
+      version: SAVE_VERSION
       grid: new Array(9).fill(null)
-      solution: new Array(9).fill(null)
+      solution: (column.slice() for column in @solution)
 
     for i in [0...9]
       gameData.grid[i] = new Array(9).fill(null)
-      gameData.solution[i] = new Array(9).fill(null)
 
     for j in [0...9]
       for i in [0...9]
@@ -415,11 +449,6 @@ class SudokuGame
         dst = gameData.grid[i][j].p
         for k in [0...9]
           dst.push(if cell.pencil[k] then 1 else 0)
-
-    for i in [0...9]
-      gameData.solution[i] = new Array(9).fill(null)
-      for j in [0...9]
-        gameData.solution[i][j] = @solution[i][j]
 
     jsonString = JSON.stringify(gameData)
     localStorage.setItem("game", jsonString)
