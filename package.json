@@ -6,23 +6,25 @@
     "sudoku"
   ],
   "author": "Joe Drago",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "license": "BSL-1.0",
+  "private": true,
   "engines": {
-    "node": ">=0.8.0"
+    "node": ">=18"
   },
   "scripts": {
     "build": "cake build",
     "watch": "cake watch",
-    "serve": "cake serve"
+    "serve": "cake serve",
+    "test": "node --require coffeescript/register --test test/*.coffee",
+    "coverage": "c8 --include \"game/src/**\" --extension .coffee --reporter=text --reporter=lcov node --require coffeescript/register --enable-source-maps --test test/*.coffee",
+    "lint": "coffeelint -f coffeelint.json Cakefile game/src test"
   },
   "devDependencies": {
-    "browserify": "^17.0.0",
-    "coffeeify": "^3.0.1",
-    "coffeescript": "^2.7.0",
-    "fontfaceobserver": "^2.3.0",
-    "node-static": "^0.7.11",
-    "node-watch": "^0.7.3",
-    "uglifyify": "^5.0.2"
+    "@coffeelint/cli": "^5.2.11",
+    "c8": "^12.0.0",
+    "coffeescript": "^2.7.1",
+    "esbuild": "^0.28.2",
+    "fontfaceobserver": "^2.3.0"
   }
 }

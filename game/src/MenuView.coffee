@@ -19,69 +19,70 @@ class MenuView
   constructor: (@app, @canvas) ->
     @buttons =
       newEasy:
-        y: buttonPos(0)
+        pos: buttonPos(0)
         text: "New Game: Easy"
         bgColor: "#337733"
         textColor: "#ffffff"
         click: @newEasy.bind(this)
       newMedium:
-        y: buttonPos(1)
+        pos: buttonPos(1)
         text: "New Game: Medium"
         bgColor: "#777733"
         textColor: "#ffffff"
         click: @newMedium.bind(this)
       newHard:
-        y: buttonPos(2)
+        pos: buttonPos(2)
         text: "New Game: Hard"
         bgColor: "#773333"
         textColor: "#ffffff"
         click: @newHard.bind(this)
       newExtreme:
-        y: buttonPos(3)
+        pos: buttonPos(3)
         text: "New Game: Extreme"
         bgColor: "#771111"
         textColor: "#ffffff"
         click: @newExtreme.bind(this)
       reset:
-        y: buttonPos(4)
+        pos: buttonPos(4)
         text: "Reset Puzzle"
         bgColor: "#773377"
         textColor: "#ffffff"
         click: @reset.bind(this)
       import:
-        y: buttonPos(5)
+        pos: buttonPos(5)
         text: "Load Puzzle"
         bgColor: "#336666"
         textColor: "#ffffff"
         click: @import.bind(this)
       export:
-        y: buttonPos(6)
+        pos: buttonPos(6)
         text: "Share Puzzle"
         bgColor: "#336666"
         textColor: "#ffffff"
         click: @export.bind(this)
       resume:
-        y: buttonPos(7)
+        pos: buttonPos(7)
         text: "Resume"
         bgColor: "#777777"
         textColor: "#ffffff"
         click: @resume.bind(this)
 
+    return
+
+  # Computes sizes and positions from the canvas size
+  layout: ->
     buttonWidth = @canvas.width * 0.8
-    @buttonHeight = @canvas.height * BUTTON_HEIGHT
+    buttonHeight = @canvas.height * BUTTON_HEIGHT
     buttonX = (@canvas.width - buttonWidth) / 2
     for buttonName, button of @buttons
       button.x = buttonX
-      button.y = @canvas.height * button.y
+      button.y = @canvas.height * button.pos
       button.w = buttonWidth
-      button.h = @buttonHeight
+      button.h = buttonHeight
 
-    buttonFontHeight = Math.floor(@buttonHeight * 0.4)
-    @buttonFont = @app.registerFont("button", "#{buttonFontHeight}px saxMono, monospace")
-    titleFontHeight = Math.floor(@canvas.height * 0.06)
-    @titleFont = @app.registerFont("button", "#{titleFontHeight}px saxMono, monospace")
-    subtitleFontHeight = Math.floor(@canvas.height * 0.02)
-    @subtitleFont = @app.registerFont("button", "#{subtitleFontHeight}px saxMono, monospace")
+    @buttonFont = @app.font(buttonHeight * 0.4)
+    @titleFont = @app.font(@canvas.height * 0.06)
+    @subtitleFont = @app.font(@canvas.height * 0.02)
     return
 
   draw: ->
@@ -99,9 +100,11 @@ class MenuView
     @app.drawTextCentered("Sudoku", x, y2, @titleFont, "#ffffff")
     @app.drawTextCentered("It's like Sudoku, but you are the bad guy.", x, y3, @subtitleFont, "#ffffff")
 
+    lineWidth = Math.max(1, Math.round(@app.pixelRatio))
     for buttonName, button of @buttons
-      @app.drawRoundedRect(button.x + shadowOffset, button.y + shadowOffset, button.w, button.h, button.h * 0.3, "black", "black")
-      @app.drawRoundedRect(button.x, button.y, button.w, button.h, button.h * 0.3, button.bgColor, "#999999")
+      r = button.h * 0.3
+      @app.drawRoundedRect(button.x + shadowOffset, button.y + shadowOffset, button.w, button.h, r, "black", "black", lineWidth)
+      @app.drawRoundedRect(button.x, button.y, button.w, button.h, r, button.bgColor, "#999999", lineWidth)
       @app.drawTextCentered(button.text, button.x + (button.w / 2), button.y + (button.h / 2), @buttonFont, button.textColor)
 
     @app.drawLowerLeft("#{@app.holeCount()}/81")
@@ -109,9 +112,9 @@ class MenuView
 
   click: (x, y) ->
     for buttonName, button of @buttons
-      if (y > button.y) && (y < (button.y + @buttonHeight))
-        # console.log "button pressed: #{buttonName}"
+      if (x > button.x) && (x < (button.x + button.w)) && (y > button.y) && (y < (button.y + button.h))
         button.click()
+        break
     return
 
   newEasy: ->
@@ -133,11 +136,9 @@ class MenuView
     @app.switchView("sudoku")
 
   export: ->
-    if navigator.share != undefined
-      navigator.share {
-        title: "Sudoku Shared Game"
-        text: @app.export()
-      }
+    if navigator.share?
+      # A cancelled share is not an error
+      navigator.share({ title: "Sudoku Shared Game", text: @app.export() }).catch(->)
       return
     window.prompt("Copy this and paste to a friend:", @app.export())
 

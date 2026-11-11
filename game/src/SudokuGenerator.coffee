@@ -1,15 +1,15 @@
 shuffle = (a) ->
-    i = a.length
-    while --i > 0
-        j = ~~(Math.random() * (i + 1))
-        t = a[j]
-        a[j] = a[i]
-        a[i] = t
-    return a
+  i = a.length
+  while --i > 0
+    j = ~~(Math.random() * (i + 1))
+    t = a[j]
+    a[j] = a[i]
+    a[i] = t
+  return a
 
 class Board
   constructor: (otherBoard = null) ->
-    @lockedCount = 0;
+    @lockedCount = 0
     @grid = new Array(9).fill(null)
     @locked = new Array(9).fill(null)
     for i in [0...9]
@@ -34,7 +34,7 @@ class Board
       @lockedCount += 1 if not @locked[x][y]
     else
       @lockedCount -= 1 if @locked[x][y]
-    @locked[x][y] = v;
+    @locked[x][y] = v
 
 
 class SudokuGenerator
@@ -71,9 +71,9 @@ class SudokuGenerator
 
     for i in [0...9]
       if (x != i) and (board.grid[i][y] == v)
-          return false
+        return false
       if (y != i) and (board.grid[x][i] == v)
-          return false
+        return false
 
     sx = Math.floor(x / 3) * 3
     sy = Math.floor(y / 3) * 3
@@ -150,7 +150,7 @@ class SudokuGenerator
     return true if unlockedCount == 0
 
     # check for a second solution
-    return @solveInternal(solved, attempts, unlockedCount-1) == null
+    return @solveInternal(solved, attempts, unlockedCount - 1) == null
 
   solveInternal: (solved, attempts, walkIndex = 0) ->
     unlockedCount = 81 - solved.lockedCount
@@ -186,6 +186,8 @@ class SudokuGenerator
       for i in [0...9]
         board.lock(i, j)
 
+    solution = new Board(board)
+
     indexesToRemove = shuffle([0...81])
     removed = 0
     while removed < amountToRemove
@@ -208,8 +210,9 @@ class SudokuGenerator
         # console.log "failed to remove #{rx},#{ry}, creates non-unique solution"
 
     return {
-      board: board
-      removed: removed
+      board
+      removed
+      solution
     }
 
   generate: (difficulty) ->
@@ -234,10 +237,36 @@ class SudokuGenerator
       console.log "current best #{best.removed} / #{amountToRemove}"
 
     console.log "giving user board: #{best.removed} / #{amountToRemove}"
-    return @boardToGrid(best.board)
+    return [@boardToGrid(best.board), @boardToGrid(best.solution)]
+
+  # Returns true if any two locked cells in the same row, column, or box have the same value
+  hasConflicts: (board) ->
+    for y in [0...9]
+      for x in [0...9]
+        continue if not board.locked[x][y]
+        v = board.grid[x][y]
+        sx = Math.floor(x / 3) * 3
+        sy = Math.floor(y / 3) * 3
+        for i in [0...9]
+          return true if (i != x) and board.locked[i][y] and (board.grid[i][y] == v)
+          return true if (i != y) and board.locked[x][i] and (board.grid[x][i] == v)
+          bx = sx + (i % 3)
+          by_ = sy + (i // 3)
+          return true if ((bx != x) or (by_ != y)) and board.locked[bx][by_] and (board.grid[bx][by_] == v)
+    return false
 
   validateGrid: (grid) ->
-    return @hasUniqueSolution(@gridToBoard(grid))
+    board = @gridToBoard(grid)
+    return false if @hasConflicts(board)
+    return @hasUniqueSolution(board)
+
+  # Returns the solved grid, or null if there is no solution
+  solveGrid: (grid) ->
+    board = @gridToBoard(grid)
+    return null if @hasConflicts(board)
+    solved = @solve(board)
+    return null if solved == null
+    return (column.slice() for column in solved.grid)
 
   solveString: (importString) ->
     if importString.indexOf("SD") != 0
@@ -258,6 +287,10 @@ class SudokuGenerator
         if v > 0
           board.grid[j][i] = v
           board.lock(j, i)
+
+    if @hasConflicts(board)
+      console.log "ERROR: Conflicting givens."
+      return false
 
     solved = @solve(board)
     if solved == null
