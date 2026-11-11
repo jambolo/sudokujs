@@ -1,164 +1,70 @@
-browserify = require 'browserify'
-coffeeify = require 'coffeeify'
-uglifyify = require 'uglifyify'
-nodeStatic = require 'node-static'
-
+esbuild = require 'esbuild'
+CoffeeScript = require 'coffeescript'
 fs = require 'fs'
-path = require 'path'
-{spawn} = require 'child_process'
-watch = require 'node-watch'
-{PassThrough} = require 'stream'
 
-# uglifyify, skipping files that match ignore
-minify = (ignore) -> (file, opts) ->
-  if ignore.test file then new PassThrough() else uglifyify file, opts
+production = process.env.NODE_ENV == 'production'
+{ version } = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 
-coffeeName = 'coffee'
-if process.platform == 'win32'
-  coffeeName += '.cmd'
+SERVE_DIR = 'game'
+SERVE_PORT = 8080
 
-buildGame = (callback) ->
-  # equal of command line $ "browserify --debug -t coffeeify ./src/main.coffee > bundle.js "
-  productionBuild = (process.env.NODE_ENV == 'production')
-  opts = {
-    extensions: ['.coffee']
-  }
-  if not productionBuild
-    opts.debug = true
-  b = browserify opts
-  b.add './game/src/main.coffee'
-  b.transform coffeeify
-  if productionBuild
-    b.transform { global: true }, minify /\/main\.[^\/]*$/
-  b.bundle (err, result) ->
-    if not err
-      fs.writeFile "game/lib/index.js", result, (err) ->
-        if not err
-          console.log "Game compilation finished."
-          callback?()
-        else
-          console.log "\x07Game bundle write failed: " + err
-    else
-      console.log "\x07Game compilation failed: " + err
+# Bundles to build
+targets = [
+  { entryPoints: ['game/src/main.coffee'],      outfile: 'game/lib/index.js',     platform: 'browser' }
+  { entryPoints: ['game/src/websolver.coffee'], outfile: 'game/lib/websolver.js', platform: 'browser' }
+  { entryPoints: ['game/src/sw.coffee'],        outfile: 'game/sw.js',            platform: 'browser' }
+  { entryPoints: ['game/src/solver.coffee'],    outfile: 'solver.js',             platform: 'node' }
+]
 
-buildWebSolver = (callback) ->
-  # equal of command line $ "browserify --debug -t coffeeify ./src/websolver.coffee > bundle.js "
-  productionBuild = (process.env.NODE_ENV == 'production')
-  opts = {
-    extensions: ['.coffee']
-  }
-  if not productionBuild
-    opts.debug = true
-  b = browserify opts
-  b.add './game/src/websolver.coffee'
-  b.transform coffeeify
-  if productionBuild
-    b.transform { global: true }, minify /\/websolver\.[^\/]*$/
-  b.bundle (err, result) ->
-    if not err
-      fs.writeFile "game/lib/websolver.js", result, (err) ->
-        if not err
-          console.log "Web solver compilation finished."
-          callback?()
-        else
-          console.log "\x07Web solver bundle write failed: " + err
-    else
-      console.log "\x07Web solver compilation failed: " + err
+# Compiles CoffeeScript sources for esbuild
+coffeePlugin =
+  name: 'coffee'
+  setup: (build) ->
+    build.onLoad { filter: /\.coffee$/ }, (args) ->
+      source = fs.readFileSync(args.path, 'utf8')
+      try
+        contents = CoffeeScript.compile(source, { filename: args.path, bare: true, inlineMap: not production })
+        return { contents, loader: 'js' }
+      catch e
+        location = { file: args.path }
+        if e.location?
+          location.line = e.location.first_line + 1
+          location.column = e.location.first_column
+        return { errors: [{ text: e.message, location }] }
 
-buildSolver = (callback) ->
-  # equal of command line $ "browserify --debug -t coffeeify ./src/main.coffee > bundle.js "
-  productionBuild = (process.env.NODE_ENV == 'production')
-  opts = {
-    extensions: ['.coffee']
-    detectGlobals: false
-    insertGlobals: false
-  }
-  if not productionBuild
-    opts.debug = true
-  b = browserify opts
-  b.add './game/src/solver.coffee'
-  b.transform coffeeify
-  if productionBuild
-    b.transform { global: true }, minify /\/main\.[^\/]*$/
-  b.bundle (err, result) ->
-    if not err
-      fs.writeFile "solver.js", result, (err) ->
-        if not err
-          console.log "Solver compilation finished."
-          callback?()
-        else
-          console.log "\x07Solver bundle write failed: " + err
-    else
-      console.log "\x07Solver compilation failed: " + err
+# Returns the esbuild options for a target
+buildOptions = (target) ->
+  Object.assign {
+    bundle: true
+    minify: production
+    sourcemap: if production then false else 'inline'
+    resolveExtensions: ['.coffee', '.js']
+    define: { VERSION: JSON.stringify(version) }
+    plugins: [coffeePlugin]
+    logLevel: 'info'
+  }, target
 
-buildVersion = (callback) ->
-  gameVersion = getVersion()
-  source = """
-    module.exports = "#{gameVersion}"
-  """
-  versionFilename = "./game/src/version.coffee"
-  sourceOnDisk = fs.readFileSync(versionFilename, "utf8")
-  if source != sourceOnDisk
-    fs.writeFileSync(versionFilename, source)
-    console.log "Updated version to #{gameVersion}"
-  callback?()
+# Builds everything once
+build = ->
+  Promise.all(esbuild.build(buildOptions(target)) for target in targets)
 
-buildEverything = (callback) ->
-  buildVersion ->
-    buildGame ->
-      buildWebSolver ->
-        buildSolver ->
-          buildAppCache ->
-            callback?()
+# Rebuilds whenever a source file changes
+watch = ->
+  contexts = await Promise.all(esbuild.context(buildOptions(target)) for target in targets)
+  await Promise.all(context.watch() for context in contexts)
+  return contexts
 
-getVersion = ->
-  return JSON.parse(fs.readFileSync("package.json", "utf8")).version
+# Errors are already reported by esbuild
+fail = ->
+  process.exitCode = 1
 
-buildAppCache = (callback) ->
-  callback?()
+task 'build', 'Build everything (set NODE_ENV=production to minify)', ->
+  build().catch(fail)
 
-  # gameVersion = getVersion()
-  # manifest = """
-  #   CACHE MANIFEST
+task 'watch', 'Rebuild whenever a source file changes', ->
+  watch().catch(fail)
 
-  #   # version #{gameVersion}
-
-  #   CACHE:
-  #   index.html
-  #   lib/index.js
-
-  # """
-  # fs.writeFile "game/game.appcache", manifest, (err) ->
-  #   if not err
-  #     console.log "Appcache generation finished. (#{gameVersion})"
-  #     callback?()
-  #   else
-  #     console.log "Appcache write failed: " + err
-
-watchEverything = ->
-  console.log "Watching for changes in src"
-  watch ['game/src','package.json'], (filename) ->
-    coffeeFileRegex = /\.coffee$/
-    if coffeeFileRegex.test(filename) || (filename == 'package.json')
-      console.log "Source code #{filename} changed."
-      console.log "Regenerating bundle..."
-      buildEverything()
-  buildEverything()
-
-task 'build', 'build game', (options) ->
-  buildEverything()
-
-task 'watch', 'Run dev server and watch for changed source files to automatically rebuild', (options) ->
-  watchEverything()
-
-task 'serve', 'serve game and watch', (options) ->
-  console.log "nodeStatic #{Object.keys(nodeStatic)}"
-  fileServer = new nodeStatic.Server('./game', { cache: 0 })
-  require('http').createServer( (request, response) ->
-    request.addListener('end', ->
-      console.log "Serving #{request.url}"
-      fileServer.serve(request, response)
-    ).resume()
-  ).listen(8080)
-  console.log "Listening on port 8080"
-  watchEverything()
+task 'serve', 'Serve the game and rebuild whenever a source file changes', ->
+  watch()
+    .then (contexts) -> contexts[0].serve({ servedir: SERVE_DIR, port: SERVE_PORT })
+    .catch(fail)

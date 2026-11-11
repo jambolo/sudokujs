@@ -2,49 +2,40 @@ FontFaceObserver = require 'fontfaceobserver'
 
 MenuView = require './MenuView'
 SudokuView = require './SudokuView'
-version = require './version'
+
+FONT_FAMILY = "saxMono, monospace"
 
 class App
   constructor: (@canvas) ->
     @ctx = @canvas.getContext("2d")
-    @loadFont("saxMono")
-    @fonts = {}
-
-    @versionFontHeight = Math.floor(@canvas.height * 0.02)
-    @versionFont = @registerFont("version", "#{@versionFontHeight}px saxMono, monospace")
-
-    @generatingFontHeight = Math.floor(@canvas.height * 0.04)
-    @generatingFont = @registerFont("generating", "#{@generatingFontHeight}px saxMono, monospace")
-
     @views =
       menu: new MenuView(this, @canvas)
       sudoku: new SudokuView(this, @canvas)
-    @switchView("sudoku")
+    @view = @views.sudoku
+    @resize()
+    @loadFont("saxMono")
 
-  measureFonts: ->
-    for fontName, f of @fonts
-      @ctx.font = f.style
-      @ctx.fillStyle = "black"
-      @ctx.textAlign = "center"
-      f.height = Math.floor(@ctx.measureText("m").width * 1.1) # best hack ever
-      console.log "Font #{fontName} measured at #{f.height} pixels"
-    return
+  # Sizes the canvas to its displayed size in device pixels and lays out the views
+  resize: ->
+    @pixelRatio = window.devicePixelRatio or 1
+    @canvas.width = Math.round(@canvas.clientWidth * @pixelRatio)
+    @canvas.height = Math.round(@canvas.clientHeight * @pixelRatio)
 
-  registerFont: (name, style) ->
-    font =
-      name: name
-      style: style
-      height: 0
-    @fonts[name] = font
-    @measureFonts()
-    return font
+    @versionFontHeight = Math.floor(@canvas.height * 0.02)
+    @versionFont = @font(@versionFontHeight)
+    @generatingFont = @font(@canvas.height * 0.04)
 
+    view.layout() for name, view of @views
+    @draw()
+
+  # Returns the canvas font for a height in pixels
+  font: (height) ->
+    return "#{Math.floor(height)}px #{FONT_FAMILY}"
+
+  # Redraws when the font becomes available
   loadFont: (fontName) ->
-    font = new FontFaceObserver(fontName)
-    font.load().then =>
-      console.log("#{fontName} loaded, redrawing...")
-      @measureFonts()
-      @draw()
+    new FontFaceObserver(fontName).load().then (=> @draw()), ->
+      console.log "Failed to load font #{fontName}"
 
   switchView: (view) ->
     @view = @views[view]
@@ -81,7 +72,7 @@ class App
     @view.click(x, y)
 
   key: (k) ->
-    @view.key(k)
+    @view.key?(k)
 
   drawFill: (x, y, w, h, color) ->
     @ctx.beginPath()
@@ -89,13 +80,15 @@ class App
     @ctx.fillStyle = color
     @ctx.fill()
 
-  drawRoundedRect: (x, y, w, h, r, fillColor = null, strokeColor = null) ->
-    @ctx.roundRect(x, y, w, h, r)
+  drawRoundedRect: (x, y, w, h, r, fillColor = null, strokeColor = null, lineWidth = 1) ->
+    @ctx.beginPath()
+    @ctx.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2))
     if fillColor != null
       @ctx.fillStyle = fillColor
       @ctx.fill()
     if strokeColor != null
       @ctx.strokeStyle = strokeColor
+      @ctx.lineWidth = lineWidth
       @ctx.stroke()
     return
 
@@ -116,24 +109,25 @@ class App
     @ctx.stroke()
 
   drawTextCentered: (text, cx, cy, font, color) ->
-    @ctx.font = font.style
+    @ctx.font = font
     @ctx.fillStyle = color
     @ctx.textAlign = "center"
-    @ctx.fillText(text, cx, cy + (font.height / 2))
+    @ctx.textBaseline = "middle"
+    @ctx.fillText(text, cx, cy)
 
   drawLowerLeft: (text, color = "white") ->
-    @ctx = @canvas.getContext("2d")
-    @ctx.font = @versionFont.style
+    @ctx.font = @versionFont
     @ctx.fillStyle = color
     @ctx.textAlign = "left"
-    @ctx.fillText(text, 0, @canvas.height - (@versionFont.height / 2))
+    @ctx.textBaseline = "alphabetic"
+    @ctx.fillText(text, 0, @canvas.height - (@versionFontHeight / 3))
 
   drawVersion: (color = "white") ->
-    @ctx = @canvas.getContext("2d")
-    @ctx.font = @versionFont.style
+    @ctx.font = @versionFont
     @ctx.fillStyle = color
     @ctx.textAlign = "right"
-    @ctx.fillText("v#{version}", @canvas.width - (@versionFont.height / 2), @canvas.height - (@versionFont.height / 2))
+    @ctx.textBaseline = "alphabetic"
+    @ctx.fillText("v#{VERSION}", @canvas.width - (@versionFontHeight / 3), @canvas.height - (@versionFontHeight / 3))
 
   drawArc: (x1, y1, x2, y2, radius, color, lineWidth) ->
     # Derived from https://github.com/jambolo/drawArc at 6c3e0d3
@@ -187,17 +181,5 @@ class App
     @ctx.arc(x, y, r, 0, 2 * Math.PI)
     @ctx.fill()
     return
-
-CanvasRenderingContext2D.prototype.roundRect = (x, y, w, h, r) ->
-  if (w < 2 * r) then r = w / 2
-  if (h < 2 * r) then r = h / 2
-  @beginPath()
-  @moveTo(x + r, y)
-  @arcTo(x + w, y,     x + w, y + h, r)
-  @arcTo(x + w, y + h, x,     y + h, r)
-  @arcTo(x,     y + h, x,     y,     r)
-  @arcTo(x,     y,     x + w, y,     r)
-  @closePath()
-  return this
 
 module.exports = App

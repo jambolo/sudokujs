@@ -1,5 +1,7 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+<meta charset="utf-8">
 <title>Bad Guy Sudoku Solver</title>
 <style>
     body {
@@ -36,8 +38,7 @@
     if(game) {
         document.getElementById("game").value = game;
         var solution = solve(game);
-        var html = solution;
-        document.getElementById("solution").innerHTML = html;
+        document.getElementById("solution").textContent = solution || "No unique solution.";
     }
 </script>
 </body>

@@ -117,37 +117,26 @@ class SudokuView
   # Init
 
   constructor: (@app, @canvas) ->
-    console.log "canvas size #{@canvas.width}x#{@canvas.height}"
+    @initActions()
+    @game = new SudokuGame()
+    @resetState()
 
-    widthBasedCellSize = @canvas.width / 9
-    heightBasedCellSize = @canvas.height / 14
-    console.log "widthBasedCellSize #{widthBasedCellSize} heightBasedCellSize #{heightBasedCellSize}"
-    @cellSize = Math.min(widthBasedCellSize, heightBasedCellSize)
+  # Computes sizes from the canvas size
+  layout: ->
+    @cellSize = Math.min(@canvas.width / 9, @canvas.height / 14)
 
     # calc render constants
-    @lineWidthThin = 1
-    @lineWidthThick = Math.max(@cellSize / 20, 3)
+    @lineWidthThin = Math.max(1, Math.round(@app.pixelRatio))
+    @lineWidthThick = Math.max(@cellSize / 20, 3 * @lineWidthThin)
     @linkDotRadius = @lineWidthThick
     @centerX = 4.5 * @cellSize
     @centerY = 4.5 * @cellSize
 
-    fontPixelsS = Math.floor(@cellSize * 0.3)
-    fontPixelsM = Math.floor(@cellSize * 0.5)
-    fontPixelsL = Math.floor(@cellSize * 0.8)
-
-    # init fonts
     @fonts =
-      pencil:  @app.registerFont("pencil",  "#{fontPixelsS}px saxMono, monospace")
-      menu:    @app.registerFont("menu",    "#{fontPixelsM}px saxMono, monospace")
-      pen:     @app.registerFont("pen",     "#{fontPixelsL}px saxMono, monospace")
-
-    @initActions()
-
-    # init state
-    @game = new SudokuGame()
-    @resetState()
-
-    @draw()
+      pencil: @app.font(@cellSize * 0.3)
+      menu:   @app.font(@cellSize * 0.5)
+      pen:    @app.font(@cellSize * 0.8)
+    return
 
   initActions: ->
     @actions = new Array(9 * 15).fill(null)
@@ -207,18 +196,29 @@ class SudokuView
     @weakLinks = []
     @highlightingValues = false
     @lastValueTapMS = now() - DOUBLE_TAP_INTERVAL_MS  # Ensure the next tap is not a double tap
-    @celebrationCount = -1                            # -1 = never run, 0 = done, > 0 = running
+    clearTimeout(@celebrationTimer) if @celebrationTimer?
+    @celebrationTimer = null
+    @celebrationCount = 0                             # > 0 while celebrating
 
   # -------------------------------------------------------------------------------------
   # Rendering
 
+  # Starts the celebration, or restarts it if it is already running
+  startCelebration: ->
+    @celebrationCount = CELEBRATION_STEPS
+    if not @celebrationTimer?
+      @celebrationTimer = setTimeout (=> @celebrate()), CELEBRATION_INTERVAL_MS
+    return
+
+  # Advances the celebration one step
   celebrate: ->
-    @draw()
+    @celebrationTimer = null
+    return if @celebrationCount <= 0
+    --@celebrationCount
+    @draw() if @app.view is this
     if @celebrationCount > 0
-      --@celebrationCount
-      setTimeout =>
-        @celebrate()
-      , CELEBRATION_INTERVAL_MS
+      @celebrationTimer = setTimeout (=> @celebrate()), CELEBRATION_INTERVAL_MS
+    return
 
   chooseCelebrationColor: (value) ->
     color = null
@@ -357,8 +357,6 @@ class SudokuView
     @app.drawPoint(x2, y2, @linkDotRadius, color)
 
   draw: (flashX, flashY) ->
-    console.log "draw()"
-
     # Clear screen to black
     @app.drawFill(0, 0, @canvas.width, @canvas.height, "black")
 
@@ -426,10 +424,10 @@ class SudokuView
     valueBackgroundColor = null
     pencilBackgroundColor = null
     if @penValue == CLEAR
-        if @mode is ModeType.PENCIL
-            pencilBackgroundColor = Color.backgroundSelected
-        else
-            valueBackgroundColor = Color.backgroundSelected
+      if @mode is ModeType.PENCIL
+        pencilBackgroundColor = Color.backgroundSelected
+      else
+        valueBackgroundColor = Color.backgroundSelected
 
     @drawCell(PEN_CLEAR_POS_X, PEN_CLEAR_POS_Y, valueBackgroundColor, "C", @fonts.pen, Color.error)
     @drawCell(PENCIL_CLEAR_POS_X, PENCIL_CLEAR_POS_Y, pencilBackgroundColor, "C", @fonts.pen, Color.error)
@@ -465,14 +463,7 @@ class SudokuView
     @drawGrid(PENCIL_POS_X, PENCIL_POS_Y, 3)
     @drawGrid(PEN_CLEAR_POS_X, PEN_CLEAR_POS_Y, 1)
     @drawGrid(PENCIL_CLEAR_POS_X, PENCIL_CLEAR_POS_Y, 1)
-
-    # If the game is solved, then start the celebration
-    if @game.solved and @celebrationCount < 0
-      @celebrationCount = CELEBRATION_STEPS
-      setTimeout =>
-        @celebrate()
-      , CELEBRATION_INTERVAL_MS
-
+    return
 
   # -------------------------------------------------------------------------------------
   # Input
@@ -484,7 +475,6 @@ class SudokuView
     return dt < DOUBLE_TAP_INTERVAL_MS
 
   newGame: (difficulty) ->
-    console.log "SudokuView.newGame(#{difficulty})"
     @resetState()
     @game.newGame(difficulty)
 
@@ -652,39 +642,39 @@ class SudokuView
     return
 
   click: (x, y) ->
-    # console.log "click #{x}, #{y}"
     x = Math.floor(x / @cellSize)
     y = Math.floor(y / @cellSize)
+    return if (x < 0) || (x >= 9) || (y < 0) || (y >= 15)
+
+    action = @actions[(y * 9) + x]
+    if action?.type is ActionType.MENU
+      @app.switchView("menu")
+      return
 
     flashX = null
     flashY = null
-    if (x < 9) && (y < 15)
-        index = (y * 9) + x
-        action = @actions[index]
-        if action != null
-          console.log "Action: ", action
+    wasSolved = @game.solved
+    if action?
+      switch action.type
+        when ActionType.SELECT then [ flashX, flashY ] = @handleSelectAction(action) ? []
+        when ActionType.PENCIL then @handlePencilAction(action)
+        when ActionType.PEN then @handlePenAction(action)
+        when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction() ? []
+        when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction() ? []
+        when ActionType.MODE then @handleModeAction()
+        when ActionType.CHECK then @handleCheckAction()
+    else
+      # no action, default to VISIBILITY mode
+      @resetMode(ModeType.VISIBILITY)
 
-          if action.type is ActionType.MENU
-            @app.switchView("menu")
-            return
+    # Celebrate when the puzzle becomes solved
+    @startCelebration() if @game.solved and not wasSolved
 
-          switch action.type
-            when ActionType.SELECT then [ flashX, flashY ] = @handleSelectAction(action) ? []
-            when ActionType.PENCIL then @handlePencilAction(action)
-            when ActionType.PEN then @handlePenAction(action)
-            when ActionType.UNDO then [ flashX, flashY ] = @handleUndoAction() ? []
-            when ActionType.REDO then [ flashX, flashY ] = @handleRedoAction() ? []
-            when ActionType.MODE then @handleModeAction()
-            when ActionType.CHECK then @handleCheckAction()
-        else
-          # no action, default to VISIBILITY mode
-          @resetMode(ModeType.VISIBILITY)
-
-        @draw(flashX, flashY)
-        if (flashX? && flashY?)
-          setTimeout =>
-            @draw()
-          , FLASH_INTERVAL_MS
+    @draw(flashX, flashY)
+    if (flashX? && flashY?)
+      setTimeout =>
+        @draw() if @app.view is this
+      , FLASH_INTERVAL_MS
     return
 
   key: (k) ->

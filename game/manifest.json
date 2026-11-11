@@ -1,6 +1,8 @@
 {
+  "id": "index.html",
   "short_name": "SudokuJS",
   "name": "SudokuJS",
+  "description": "Sudoku with pencil marks, links, and checking",
   "icons": [
     {
       "src": "launcher/launcher-icon-2x.png",
@@ -19,6 +21,9 @@
     }
   ],
   "start_url": "index.html",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "background_color": "#333333",
+  "theme_color": "#333333"
 }

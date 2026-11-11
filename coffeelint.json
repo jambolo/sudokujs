@@ -1,0 +1,11 @@
+{
+  "no_implicit_braces": {
+    "level": "ignore"
+  },
+  "colon_assignment_spacing": {
+    "level": "ignore"
+  },
+  "max_line_length": {
+    "value": 132
+  }
+}

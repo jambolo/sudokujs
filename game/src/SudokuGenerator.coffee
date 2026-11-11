@@ -1,11 +1,11 @@
 shuffle = (a) ->
-    i = a.length
-    while --i > 0
-        j = ~~(Math.random() * (i + 1))
-        t = a[j]
-        a[j] = a[i]
-        a[i] = t
-    return a
+  i = a.length
+  while --i > 0
+    j = ~~(Math.random() * (i + 1))
+    t = a[j]
+    a[j] = a[i]
+    a[i] = t
+  return a
 
 class Board
   constructor: (otherBoard = null) ->
@@ -71,9 +71,9 @@ class SudokuGenerator
 
     for i in [0...9]
       if (x != i) and (board.grid[i][y] == v)
-          return false
+        return false
       if (y != i) and (board.grid[x][i] == v)
-          return false
+        return false
 
     sx = Math.floor(x / 3) * 3
     sy = Math.floor(y / 3) * 3

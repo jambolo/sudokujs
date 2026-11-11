@@ -9,7 +9,9 @@ ascendingLinkSort = (a, b) ->
   a1 = cellIndex(a.cells[1].x, a.cells[1].y)
   b0 = cellIndex(b.cells[0].x, b.cells[0].y)
   b1 = cellIndex(b.cells[1].x, b.cells[1].y)
-  return if a0 > b0 or (a0 == b0 and (a1 > b1 or (a1 == b1 and (not a.strong? and b.strong?)))) then 1 else -1
+  return a0 - b0 if a0 != b0
+  return a1 - b1 if a1 != b1
+  return (if a.strong? then 0 else 1) - (if b.strong? then 0 else 1)
 
 # Note strength is not compared
 uniqueLinkFilter = (e, i, a) ->
@@ -41,6 +43,25 @@ isFullGrid = (grid) ->
     for v in column
       return false if not Number.isInteger(v) or v < 1 or v > 9
   return true
+
+# Returns true if the value is a valid undo or redo journal
+isJournal = (journal) ->
+  return false if not Array.isArray(journal)
+  for step in journal
+    return false if step?.action not in ["togglePencil", "setValue"]
+    return false if not (Number.isInteger(step.x) and 0 <= step.x < 9)
+    return false if not (Number.isInteger(step.y) and 0 <= step.y < 9)
+    return false if not Array.isArray(step.values) or step.values.length == 0
+    for v in step.values
+      return false if not (Number.isInteger(v) and 0 <= v <= 9)
+  return true
+
+# Returns the local storage, or null if it is unavailable or blocked
+getStorage = ->
+  try
+    return localStorage ? null
+  catch
+    return null
 
 class SudokuGame
   constructor: ->
@@ -223,23 +244,22 @@ class SudokuGame
     marks = (i + 1 for flag, i in cell.pencil when flag)
     if marks.length == 0
       return
-    @do "togglePencil", x, y, marks, @undoJournal
     @redoJournal = []
+    @do "togglePencil", x, y, marks, @undoJournal
 
   togglePencil: (x, y, v) ->
     if @grid[x][y].locked
       return
-    @do "togglePencil", x, y, [v], @undoJournal
     @redoJournal = []
+    @do "togglePencil", x, y, [v], @undoJournal
 
   setValue: (x, y, v) ->
     if @grid[x][y].locked or @grid[x][y].value == v
       return
-    @do "setValue", x, y, [v], @undoJournal
     @redoJournal = []
+    @do "setValue", x, y, [v], @undoJournal
 
   reset: ->
-    console.log "reset()"
     for j in [0...9]
       for i in [0...9]
         cell = @grid[i][j]
@@ -250,8 +270,6 @@ class SudokuGame
           cell.pencil[k] = false
     @undoJournal = []
     @redoJournal = []
-    @highlightX = -1
-    @highlightY = -1
     @updateCells()
     @save()
 
@@ -259,18 +277,13 @@ class SudokuGame
     # Note: the search sorts the links in row major order, first by start cell, then by end cell
     links = []
 
-    # Get row links
-    for y in [0...9]
-      links.push @getRowLinks(y, value)...
-
-    # Get column links
-    for x in [0...9]
-      links.push @getColumnLinks(x, value)...
-
-    # Get box links
-    for boxX in [0...3]
-      for boxY in [0...3]
-        links.push @getBoxLinks(boxX, boxY, value)...
+    for i in [0...9]
+      # Row, column, and box
+      sx = (i % 3) * 3
+      sy = (i // 3) * 3
+      links.push @getUnitLinks(({ x, y: i } for x in [0...9]), value)...
+      links.push @getUnitLinks(({ x: i, y } for y in [0...9]), value)...
+      links.push @getUnitLinks(({ x: sx + (k % 3), y: sy + (k // 3) } for k in [0...9]), value)...
 
     # The box links might have duplicated some row and column links, so duplicates must be filtered out. Note that only
     # locations are considered when finding duplicates, but strong links take precedence when duplicates are removed
@@ -286,80 +299,29 @@ class SudokuGame
 
     return { strong, weak }
 
-  getRowLinks: (y, value) ->
-    cells = []
-    for x in [0...9]
-      cell = @grid[x][y]
-      if cell.value == 0 and cell.pencil[value - 1]
-        cells.push({ x, y })
-
-    if cells.length > 1
-      links = generateLinkPermutations(cells)
-      if links.length == 1
-        links[0].strong = true
-    else
-      links = []
+  # Returns the links between the unsolved cells in the unit that are marked with the value
+  getUnitLinks: (unit, value) ->
+    cells = (c for c in unit when @grid[c.x][c.y].value == 0 and @grid[c.x][c.y].pencil[value - 1])
+    return [] if cells.length < 2
+    links = generateLinkPermutations(cells)
+    links[0].strong = true if links.length == 1
     return links
 
-  getColumnLinks: (x, value) ->
-    cells = []
-    for y in [0...9]
-      cell = @grid[x][y]
-      if cell.value == 0 and cell.pencil[value - 1]
-        cells.push({ x, y })
-
-    if cells.length > 1
-      links = generateLinkPermutations(cells)
-      if links.length == 1
-        links[0].strong = true
-    else
-      links = []
-    return links
-
-  getBoxLinks: (boxX, boxY, value) ->
-    cells = []
-    sx = boxX * 3
-    sy = boxY * 3
-    for y in [sy...sy + 3]
-      for x in [sx...sx + 3]
-        cell = @grid[x][y]
-        if cell.value == 0 and cell.pencil[value - 1]
-          cells.push({ x, y })
-
-    if cells.length > 1
-      links = generateLinkPermutations(cells)
-      if links.length == 1
-        links[0].strong = true
-    else
-      links = []
-    return links
-
+  # Returns false if the mark is ruled out by a correct value in the same row, column, or box
   markIsGood: (x, y, m) ->
-    # The correct mark is always good
-    return true if @solution[x][y] == m
-
-    # Check if this mark is a known value in the column
-    for j in [0...9] when j isnt y
-      if @grid[x][j].value == m
-        return false
-
-    # Check if this mark is a known value in the row
-    for i in [0...9] when i isnt x
-      if @grid[i][y].value == m
-        return false
-
-    # Check if this mark is a known value in the box
     sx = Math.floor(x / 3) * 3
     sy = Math.floor(y / 3) * 3
-    for i in [sx...sx + 3]
-      for j in [sy...sy + 3]
-        if (i != x || j != y) && @grid[i][j].value == m
-          return false
-
+    for i in [0...9]
+      return false if @valueIsCorrect(i, y, m)
+      return false if @valueIsCorrect(x, i, m)
+      return false if @valueIsCorrect(sx + (i % 3), sy + (i // 3), m)
     return true
 
+  # Returns true if the cell has the value and it matches the solution
+  valueIsCorrect: (x, y, v) ->
+    return @grid[x][y].value == v and @solution[x][y] == v
+
   newGame: (difficulty) ->
-    console.log "newGame(#{difficulty})"
     for j in [0...9]
       for i in [0...9]
         cell = @grid[i][j]
@@ -383,10 +345,11 @@ class SudokuGame
     @save()
 
   load: ->
-    if not localStorage
-      alert("No local storage, nothing will work")
+    storage = getStorage()
+    if storage == null
+      console.log "No local storage, the game will not be saved"
       return false
-    jsonString = localStorage.getItem("game")
+    jsonString = storage.getItem("game")
     if jsonString == null
       return false
 
@@ -416,24 +379,27 @@ class SudokuGame
         @solution = new SudokuGenerator().solveGrid(givens)
         if @solution == null
           throw new Error("saved puzzle has no solution")
+
+      @undoJournal = if isJournal(gameData.undo) then gameData.undo else []
+      @redoJournal = if isJournal(gameData.redo) then gameData.redo else []
     catch e
       console.log "Failed to load saved game: #{e.message}"
       @clear()
       return false
 
     @updateCells()
-    console.log "Loaded game."
     return true
 
   save: ->
-    if not localStorage
-      alert("No local storage, nothing will work")
-      return false
+    storage = getStorage()
+    return false if storage == null
 
     gameData =
       version: SAVE_VERSION
       grid: new Array(9).fill(null)
       solution: (column.slice() for column in @solution)
+      undo: @undoJournal
+      redo: @redoJournal
 
     for i in [0...9]
       gameData.grid[i] = new Array(9).fill(null)
@@ -450,9 +416,11 @@ class SudokuGame
         for k in [0...9]
           dst.push(if cell.pencil[k] then 1 else 0)
 
-    jsonString = JSON.stringify(gameData)
-    localStorage.setItem("game", jsonString)
-    console.log "Saved game (#{jsonString.length} chars)"
+    try
+      storage.setItem("game", JSON.stringify(gameData))
+    catch e
+      console.log "Failed to save game: #{e.message}"
+      return false
     return true
 
 module.exports = SudokuGame

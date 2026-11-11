@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="utf-8">
 <title>SudokuJS</title>
 <meta name="viewport" id="metaViewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+<meta name="theme-color" content="#333333">
 <link rel="manifest" href="manifest.json">
 <style>
 * {
@@ -13,8 +15,14 @@
   padding: 0;
 }
 html, body {
-  overflow-y:hidden;
+  overflow:hidden;
   height:100%;
+}
+canvas {
+  display:block;
+  width:100%;
+  height:100%;
+  touch-action:none;
 }
 @font-face {
     font-family: "saxMono";
@@ -24,13 +32,6 @@ html, body {
 <!-- <link rel="stylesheet" href="css/notie.min.css" /> -->
 </head>
 <body>
-<script>
-// This awful code ensures Android canvases are pixel-for-pixel.
-if((navigator.userAgent.toLowerCase().indexOf('android') > -1) && (window.devicePixelRatio > 0)) {
-    var viewportScale = 1 / window.devicePixelRatio;
-    document.getElementById('metaViewport').setAttribute('content', 'width=device-width, initial-scale='+viewportScale+', user-scalable=no');
-}
-</script>
 <script src="lib/index.js"></script>
 </body>
 </html>

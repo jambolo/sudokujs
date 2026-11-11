@@ -1,3 +1,4 @@
 /node_modules
-game/lib/index.js
-solver.js
+/solver.js
+/game/sw.js
+/game/lib/*.js
