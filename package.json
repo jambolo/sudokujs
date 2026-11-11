@@ -17,10 +17,12 @@
     "watch": "cake watch",
     "serve": "cake serve",
     "test": "node --require coffeescript/register --test test/*.coffee",
+    "coverage": "c8 --include \"game/src/**\" --extension .coffee --reporter=text --reporter=lcov node --require coffeescript/register --enable-source-maps --test test/*.coffee",
     "lint": "coffeelint -f coffeelint.json Cakefile game/src test"
   },
   "devDependencies": {
     "@coffeelint/cli": "^5.2.11",
+    "c8": "^12.0.0",
     "coffeescript": "^2.7.1",
     "esbuild": "^0.28.2",
     "fontfaceobserver": "^2.3.0"

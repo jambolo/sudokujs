@@ -1,4 +1,6 @@
 /node_modules
+/coverage
+/_site
 /solver.js
 /game/sw.js
 /game/lib/*.js
