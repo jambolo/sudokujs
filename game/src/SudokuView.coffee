@@ -27,6 +27,9 @@ REDO_POS_Y = 13
 CHECK_POS_X = 8
 CHECK_POS_Y = 9
 
+HELP_POS_X = 0
+HELP_POS_Y = 9
+
 Color =
   value: "black"
   pencil: "#0000ff"
@@ -55,6 +58,7 @@ ActionType =
   REDO: 5
   MODE: 6
   CHECK: 7
+  HELP: 8
 
 ModeType =
   VISIBILITY: 0
@@ -177,6 +181,10 @@ class SudokuView
     # Check button
     index = (CHECK_POS_Y * 9) + CHECK_POS_X
     @actions[index] = { type: ActionType.CHECK }
+
+    # Help button
+    index = (HELP_POS_Y * 9) + HELP_POS_X
+    @actions[index] = { type: ActionType.HELP }
 
     return
 
@@ -474,6 +482,7 @@ class SudokuView
     @drawCell(UNDO_POS_X, UNDO_POS_Y, null, "\u{25c4}", @fonts.menu, Color.menu) if (@game.undoJournal.length > 0)
     @drawCell(REDO_POS_X, REDO_POS_Y, null, "\u{25ba}", @fonts.menu, Color.menu) if (@game.redoJournal.length > 0)
     @drawCell(CHECK_POS_X, CHECK_POS_Y, null, "\u{2714}", @fonts.menu, Color.error)
+    @drawCell(HELP_POS_X, HELP_POS_Y, null, "?", @fonts.menu, Color.menu)
 
     # Make the grids
     @drawGrid(0, 0, 9, @game.solved)
@@ -667,6 +676,9 @@ class SudokuView
     action = @actions[(y * 9) + x]
     if action?.type is ActionType.MENU
       @app.switchView("menu")
+      return
+    if action?.type is ActionType.HELP
+      @app.showHelp()
       return
 
     flashX = null

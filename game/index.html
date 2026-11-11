@@ -24,6 +24,47 @@ canvas {
   height:100%;
   touch-action:none;
 }
+dialog {
+  margin:auto;
+  width:min(40em, 94vw);
+  height:92vh;
+  border:none;
+  border-radius:8px;
+  overflow:hidden;
+  background:#ffffff;
+}
+dialog[open] {
+  display:flex;
+  flex-direction:column;
+}
+dialog::backdrop {
+  background:rgba(0, 0, 0, 0.6);
+}
+dialog header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0.4em 0.4em 0.4em 1em;
+  font:bold 18px system-ui, sans-serif;
+  color:#ffffff;
+  background:#333333;
+}
+dialog button {
+  width:2em;
+  height:2em;
+  border:none;
+  border-radius:4px;
+  font:inherit;
+  font-size:22px;
+  color:#ffffff;
+  background:#008833;
+  cursor:pointer;
+}
+dialog iframe {
+  flex:1;
+  width:100%;
+  border:none;
+}
 @font-face {
     font-family: "saxMono";
     src: url(fonts/saxmono.ttf) format("truetype");
@@ -32,6 +73,10 @@ canvas {
 <!-- <link rel="stylesheet" href="css/notie.min.css" /> -->
 </head>
 <body>
+<dialog id="help" aria-labelledby="helpTitle">
+<header><span id="helpTitle">Help</span><button id="helpClose" aria-label="Close">&times;</button></header>
+<iframe src="help.html" title="How to use the app"></iframe>
+</dialog>
 <script src="lib/index.js"></script>
 </body>
 </html>

@@ -17,6 +17,7 @@ class FakeApp
   font: (height) -> "#{Math.floor(height)}px test"
   switchView: (name) -> @switched.push(name)
   newGame: (difficulty) -> @switched.push("new #{difficulty}")
+  showHelp: -> @switched.push("help")
   holeCount: -> 0
   drawFill: -> @drawCount += 1
   drawRect: ->
@@ -84,6 +85,15 @@ test 'pen and pencil entry', ->
   clickCell(view, 2, 0)
   assert.deepEqual(view.game.pencilMarks(2, 0), [1])
   assert.equal(view.preferPencil, true)
+
+test 'the help button shows the help without changing the mode', ->
+  view = newView()
+  selectPen(view, 4)
+  clickCell(view, 0, 9)                               # help
+  assert.deepEqual(view.app.switched, ["help"])
+  assert.equal(view.penValue, 4)
+  clickCell(view, 2, 0)
+  assert.equal(view.game.grid[2][0].value, 4)
 
 test 'keys follow the mode label', ->
   view = newView()

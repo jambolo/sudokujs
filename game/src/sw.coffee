@@ -1,5 +1,5 @@
 CACHE_NAME = "sudokujs-#{VERSION}"
-ASSETS = ['./', 'index.html', 'lib/index.js', 'fonts/saxmono.ttf', 'manifest.json']
+ASSETS = ['./', 'index.html', 'help.html', 'lib/index.js', 'fonts/saxmono.ttf', 'manifest.json']
 
 # Caches the app shell
 install = ->

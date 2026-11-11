@@ -65,6 +65,10 @@ class App
   holeCount: ->
     return @views.sudoku.holeCount()
 
+  # Shows the instructions in a popup
+  showHelp: ->
+    document.getElementById("help").showModal()
+
   draw: ->
     @view.draw()
 
